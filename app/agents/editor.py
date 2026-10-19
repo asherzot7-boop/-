@@ -35,6 +35,9 @@ def rule_fixes(text: str) -> tuple[str, list[str]]:
     if re.search(r"([,;:!?])(?=[^\s\d»\"”)])", fixed):
         fixed = re.sub(r"([,;:!?])(?=[^\s\d»\"”)])", r"\1 ", fixed)
         notes.append("Тиниш белгисидан кейин бўш жой қўшилди.")
+    if re.search(r"\.(?=[A-ZА-ЯЁЎҚҒҲ])", fixed):
+        fixed = re.sub(r"\.(?=[A-ZА-ЯЁЎҚҒҲ])", ". ", fixed)
+        notes.append("Нуқтадан кейин бўш жой қўшилди.")
     repeated = re.compile(r"\b(\w+)(\s+\1\b)+", re.I | re.U)
     if repeated.search(fixed):
         fixed = repeated.sub(r"\1", fixed)

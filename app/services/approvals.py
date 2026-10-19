@@ -114,6 +114,26 @@ class AlreadyDecided(Exception):
         self.approval = approval
 
 
+async def _close_parent(session: AsyncSession, task: Task) -> None:
+    """When the last waiting step is decided, the parent task gets its final status."""
+    if task.parent_id is None:
+        return
+    parent = await session.get(Task, task.parent_id)
+    if parent is None or parent.status != TaskStatus.WAITING_APPROVAL:
+        return
+    await session.flush()
+    steps = (await session.scalars(select(Task).where(Task.parent_id == parent.id))).all()
+    statuses = {t.status for t in steps}
+    if TaskStatus.WAITING_APPROVAL in statuses:
+        return
+    if TaskStatus.FAILED in statuses:
+        parent.status = TaskStatus.FAILED
+    elif statuses == {TaskStatus.CANCELLED}:
+        parent.status = TaskStatus.CANCELLED
+    else:
+        parent.status = TaskStatus.DONE
+
+
 async def decide(session: AsyncSession, approval_id: int, user: User, approve: bool, note: str | None = None) -> Approval:
     if not has_role(user, Role.DIRECTOR):
         await audit.log_action(session, "approval.denied", user, "approval", approval_id, {"reason": "not director"})
@@ -137,6 +157,7 @@ async def decide(session: AsyncSession, approval_id: int, user: User, approve: b
     if task is not None and task.status == TaskStatus.WAITING_APPROVAL:
         task.status = TaskStatus.DONE if approve else TaskStatus.CANCELLED
         task.result = approval.execution_result
+        await _close_parent(session, task)
 
     await audit.log_action(
         session, "approval.decided", user, "approval", approval.id,

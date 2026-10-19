@@ -70,3 +70,11 @@ class BrokenJSONLLM:
 async def test_garbage_llm_falls_back_to_rules():
     steps = await Coordinator(BrokenJSONLLM()).classify(EXAMPLE)
     assert [s.agent for s in steps] == ["production", "editor", "methodist"]
+
+
+def test_editor_rules():
+    from app.agents.editor import rule_fixes
+
+    fixed, notes = rule_fixes("от сўз туркуми .От от предметни билдиради")
+    assert fixed == "От сўз туркуми. От предметни билдиради"
+    assert fixed != "от сўз туркуми .От от предметни билдиради" and notes

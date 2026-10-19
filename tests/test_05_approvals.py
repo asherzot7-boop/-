@@ -35,6 +35,10 @@ async def test_print_needs_director(env):
     assert "аллақачон" in (await env.service.decide(DIRECTOR, approval.id, True)).text
     async with env.sf() as s:
         assert (await s.get(Book, book_id)).stage == BookStage.PRINTING
+        from app.database.models import Task, TaskStatus
+
+        parent = await s.scalar(select(Task).where(Task.parent_id.is_(None)))
+        assert parent.status == TaskStatus.DONE  # the whole task is closed, not left "open"
         log = await s.scalar(select(AuditLog).where(AuditLog.action == "approval.decided"))
     assert log.telegram_id == DIRECTOR and log.user_id is not None
     assert log.details["decision"] == "approved" and log.details["decided_at"]
