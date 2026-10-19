@@ -64,7 +64,7 @@ def parse_json_object(text: str) -> dict | None:
     text = clean_untrusted(text)
     if not text:
         return None
-    m = re.search(r"\{.*\}", text, re.S)
+    m = re.search(r"\{.*\}", text, re.DOTALL)
     if not m:
         return None
     try:

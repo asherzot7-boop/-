@@ -7,10 +7,10 @@ from app.agents.base import AgentContext, AgentResult, BaseAgent
 from app.agents.llm import clean_untrusted, parse_json_object
 from app.agents.textutil import extract_body_text, sentences, words
 
-_HEADING = re.compile(r"^\s*(?:#+\s*|\d+[.)]\s+|(?:боб|bob|мавзу|mavzu|бўлим|bo'lim)\s*\d*[.:]?\s*)(.+)$", re.I | re.M)
-_GRADE = re.compile(r"(\d{1,2})\s*-?\s*(?:синф|sinf)", re.I)
-_SOURCED = re.compile(r"\(манба|\(manba|\[\d+\]|манба:|manba:", re.I)
-_CLAIM = re.compile(r"\d{3,}|%|\bэнг\b|\bолимлар\b|\bтадқиқот|\beng\b", re.I)
+_HEADING = re.compile(r"^\s*(?:#+\s*|\d+[.)]\s+|(?:боб|bob|мавзу|mavzu|бўлим|bo'lim)\s*\d*[.:]?\s*)(.+)$", re.IGNORECASE | re.MULTILINE)
+_GRADE = re.compile(r"(\d{1,2})\s*-?\s*(?:синф|sinf)", re.IGNORECASE)
+_SOURCED = re.compile(r"\(манба|\(manba|\[\d+\]|манба:|manba:", re.IGNORECASE)
+_CLAIM = re.compile(r"\d{3,}|%|\bэнг\b|\bолимлар\b|\bтадқиқот|\beng\b", re.IGNORECASE)
 
 SYSTEM = (
     "Сен дарсликлар бўйича методистсан. Берилган маълумот асосида JSON қайтар: "

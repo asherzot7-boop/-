@@ -14,7 +14,7 @@ from app.agents.textutil import extract_body_text, sentences
 
 _CYR = re.compile(r"[а-яёўқғҳА-ЯЁЎҚҒҲ]")
 _LAT = re.compile(r"[a-zA-Z]")
-_FACT_HINTS = re.compile(r"\d|%|\bэнг\b|\bбиринчи марта\b|\bдунёда\b|\beng\b|\bbirinchi\b|\bолимлар\b|\bтадқиқот", re.I)
+_FACT_HINTS = re.compile(r"\d|%|\bэнг\b|\bбиринчи марта\b|\bдунёда\b|\beng\b|\bbirinchi\b|\bолимлар\b|\bтадқиқот", re.IGNORECASE)
 
 SYSTEM = (
     "Сен ўзбек тилидаги нашриёт муҳарририсан. Матнни имло, грамматика ва услуб бўйича текшир. "
@@ -38,7 +38,7 @@ def rule_fixes(text: str) -> tuple[str, list[str]]:
     if re.search(r"\.(?=[A-ZА-ЯЁЎҚҒҲ])", fixed):
         fixed = re.sub(r"\.(?=[A-ZА-ЯЁЎҚҒҲ])", ". ", fixed)
         notes.append("Нуқтадан кейин бўш жой қўшилди.")
-    repeated = re.compile(r"\b(\w+)(\s+\1\b)+", re.I | re.U)
+    repeated = re.compile(r"\b(\w+)(\s+\1\b)+", re.IGNORECASE | re.UNICODE)
     if repeated.search(fixed):
         fixed = repeated.sub(r"\1", fixed)
         notes.append("Такрорланган сўз олиб ташланди.")

@@ -30,7 +30,7 @@ def period_bounds(period: str, tz: ZoneInfo, now: datetime | None = None) -> tup
         start = day_start.replace(day=1)
     else:
         start = day_start
-    to_utc = lambda d: d.astimezone(ZoneInfo("UTC")).replace(tzinfo=None)  # noqa: E731
+    to_utc = lambda d: d.astimezone(ZoneInfo("UTC")).replace(tzinfo=None)
     return to_utc(start), to_utc(local)
 
 

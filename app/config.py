@@ -29,6 +29,8 @@ class Settings(BaseSettings):
 
     openai_model: str = "gpt-4o-mini"
     openai_timeout: float = 60.0
+    # "rules": classic keyword coordinator. "agentic": tool-calling agent with durable workflows.
+    agent_engine: str = "rules"
 
     database_url: str = "sqlite+aiosqlite:///./data/nashriyot.db"
 

@@ -16,6 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.database.models import Approval, ApprovalKind, ApprovalStatus, BookStage, Role, Task, TaskStatus, User, utcnow
 from app.security import audit
 from app.security.permissions import AccessDenied, has_role
+from app.services import events
 
 KIND_NAMES = {
     ApprovalKind.PAYMENT: "тўлов",
@@ -164,4 +165,6 @@ async def decide(session: AsyncSession, approval_id: int, user: User, approve: b
         {"decision": approval.status.value, "kind": approval.kind.value, "decided_at": approval.decided_at.isoformat(), "note": note},
     )
     await session.flush()
+    # Lets a paused agent workflow continue (see app/agentic/runtime.py).
+    await events.emit(session, "approval_decided", {"approval_id": approval.id, "approved": approve, "user_id": user.id})
     return approval

@@ -49,7 +49,18 @@ async def build_container(settings: Settings) -> Container:
     async with sf() as session:
         await sync_users(session, directors, settings.staff_ids, settings.viewer_ids)
     coordinator = Coordinator(build_llm(settings))
-    return Container(settings, engine, sf, coordinator, CommandService(sf, coordinator, settings))
+    return Container(settings, engine, sf, coordinator, CommandService(sf, coordinator, settings, runtime=build_runtime(settings)))
+
+
+def build_runtime(settings: Settings):
+    from app.agentic.llm import OpenAIToolModel, RuleToolModel
+    from app.agentic.runtime import AgentRuntime
+
+    if settings.llm_enabled:
+        model = OpenAIToolModel(settings.openai_api_key.get_secret_value(), settings.openai_model, settings.openai_timeout)
+    else:
+        model = RuleToolModel()
+    return AgentRuntime(model)
 
 
 async def _serve_api(c: Container) -> None:

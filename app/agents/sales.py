@@ -16,9 +16,9 @@ from app.database.models import ApprovalKind, Client, Order, OrderStatus, utcnow
 from app.services import approvals, orders
 from app.services.finance import fmt_money
 
-_DISCOUNT = re.compile(r"чегирма|chegirma|скидка", re.I)
-_MASS = re.compile(r"оммавий|ҳаммага|hammaga|ommaviy|рассылка|барча мижоз", re.I)
-_OFFER = re.compile(r"таклиф|taklif|хабар\s+мат|xabar", re.I)
+_DISCOUNT = re.compile(r"чегирма|chegirma|скидка", re.IGNORECASE)
+_MASS = re.compile(r"оммавий|ҳаммага|hammaga|ommaviy|рассылка|барча мижоз", re.IGNORECASE)
+_OFFER = re.compile(r"таклиф|taklif|хабар\s+мат|xabar", re.IGNORECASE)
 
 SYSTEM = (
     "Сен нашриёт сотув менежерисан. Мижозга қисқа, хушмуомала таклиф хабарини ўзбек тилида ёз. "

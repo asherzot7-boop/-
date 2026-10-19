@@ -1,9 +1,8 @@
 """7. Ҳисоботлар реал база маълумотларидан тузилади."""
 from datetime import timedelta
 
-from app.database.models import BookStage, utcnow
+from app.database.models import ApprovalKind, BookStage, utcnow
 from app.services import approvals, books, finance, orders, reporting, tasks
-from app.database.models import ApprovalKind
 from tests.conftest import DIRECTOR
 
 

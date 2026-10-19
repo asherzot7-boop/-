@@ -16,7 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.agents.coordinator import Coordinator
 from app.config import Settings
-from app.database.models import AgentRun, ApprovalKind, BookStage, Role, Task, User, utcnow
+from app.database.models import AgentRun, ApprovalKind, BookStage, Role, Task, User
 from app.security import audit
 from app.security.permissions import ROLE_NAMES, AccessDenied, check, get_active_user, required_role
 from app.services import approvals, books, finance, orders, reporting, settings_store, tasks
@@ -51,6 +51,7 @@ HELP = """Nashriyot AI — буйруқлар
 /report [day|week|month] — умумий ҳисобот (KPI)
 /approve — тасдиқ кутаётган қарорлар (раҳбар)
 /agents — агентлар ҳолати
+/ai <мақсад> — агентли режим: AI асбобларни ўзи чақиради · /flow [id] — жараён қадамлари
 /pause · /resume — автоматик жараёнлар (раҳбар)
 
 Оддий тилда ҳам ёзишингиз мумкин, масалан:
@@ -90,9 +91,10 @@ def chunks(text: str, limit: int = TG_LIMIT) -> list[str]:
 
 
 class CommandService:
-    def __init__(self, session_factory: async_sessionmaker[AsyncSession], coordinator: Coordinator, settings: Settings) -> None:
+    def __init__(self, session_factory: async_sessionmaker[AsyncSession], coordinator: Coordinator, settings: Settings, runtime=None) -> None:
         self.sf = session_factory
         self.coordinator = coordinator
+        self.runtime = runtime  # app.agentic.runtime.AgentRuntime, optional
         self.settings = settings
 
     @property
@@ -123,7 +125,8 @@ class CommandService:
                 command = head[1:].split("@")[0].lower()
                 args_text = rest.strip()
             else:
-                command, args_text = "task", text
+                command = "ai" if self.runtime is not None and self.settings.agent_engine == "agentic" else "task"
+                args_text = text
             args = _split(args_text)
             handler = getattr(self, f"cmd_{command}", None)
             if handler is None:
@@ -171,7 +174,15 @@ class CommandService:
                 log.exception("Тасдиқлаш хатоси")
                 return Reply("❗ Ички хатолик. Қарор сақланмади.")
             mark = "✅ Тасдиқланди" if approve else "🚫 Рад этилди"
-            return Reply(f"{mark}: #{a.id} {a.title}\n{a.execution_result or ''}")
+            text = f"{mark}: #{a.id} {a.title}\n{a.execution_result or ''}"
+            wf_id = (a.payload or {}).get("workflow_id")
+            if wf_id:
+                from app.agentic.models import Workflow
+
+                wf = await session.get(Workflow, wf_id)
+                if wf is not None:
+                    text += "\n\n" + self._workflow_text(wf)
+            return Reply(text)
 
     # ------------------------------------------------------------------ commands
     async def cmd_start(self, s, user: User, args, raw, key) -> Reply:
@@ -396,6 +407,46 @@ class CommandService:
                 lines.append(f"• {agent.title}: {st.runs} марта, хато {st.errors}, ўртача {st.avg_ms:.0f} мс, охирги {self._local(st.last_run)}")
             else:
                 lines.append(f"• {agent.title}: ҳали ишламаган")
+        return Reply("\n".join(lines))
+
+    # ------------------------------------------------------------------ agentic engine
+    def _workflow_text(self, wf) -> str:
+        from app.agentic.models import WorkflowStatus
+
+        head = {WorkflowStatus.DONE: "✅ Бажарилди", WorkflowStatus.WAITING_APPROVAL: "✋ Раҳбар тасдиғини кутмоқда",
+                WorkflowStatus.FAILED: "❌ Тўхтади", WorkflowStatus.RUNNING: "⏳ Бажарилмоқда"}[wf.status]
+        body = wf.result if wf.status == WorkflowStatus.DONE else (wf.error or "")
+        if wf.status == WorkflowStatus.WAITING_APPROVAL:
+            body = f"Тасдиқ сўрови #{wf.waiting_approval_id} — /approve. Тасдиқлангандан кейин иш ўзи давом этади."
+        return f"🤖 Жараён #{wf.id}: {head}\n{body}".strip() + f"\n(қадамлар: /flow {wf.id})"
+
+    async def cmd_ai(self, s: AsyncSession, user: User, args, raw: str, key) -> Reply:
+        if self.runtime is None:
+            return Reply("Агентли режим уланмаган.")
+        if not raw:
+            return Reply("Мақсадни ёзинг: /ai #1 китоб таннархини ҳисобла ва босмахонага юбор")
+        wf, created = await self.runtime.start(s, raw, user, idempotency_key=key)
+        if not created:
+            return Reply(f"Бу буйруқ аллақачон қабул қилинган: жараён #{wf.id}.")
+        return Reply(self._workflow_text(wf))
+
+    async def cmd_flow(self, s: AsyncSession, user: User, args: list[str], raw, key) -> Reply:
+        from app.agentic.models import Workflow
+        from app.agentic.runtime import workflow_steps
+
+        if not args:
+            rows = list(await s.scalars(select(Workflow).order_by(Workflow.id.desc()).limit(10)))
+            if not rows:
+                return Reply("Ҳали агентли жараёнлар йўқ. Бошлаш: /ai <мақсад>")
+            return Reply("🤖 Сўнгги жараёнлар:\n" + "\n".join(f"#{w.id} [{w.status.value}] {w.goal[:70]}" for w in rows))
+        wf = await s.get(Workflow, _int(args[0], "Жараён ID"))
+        if wf is None:
+            raise LookupError("Жараён топилмади.")
+        icons = {"ok": "✓", "error": "✕", "rejected": "⛔", "waiting": "✋", "resumed": "↻"}
+        lines = [f"🤖 Жараён #{wf.id}: {wf.goal[:120]}", f"Ҳолат: {wf.status.value} · модель чақирувлари: {wf.model_calls} · токенлар: {wf.tokens_in}+{wf.tokens_out}", ""]
+        for st in await workflow_steps(s, wf.id):
+            summary = (st.result or {}).get("summary") or (st.result or {}).get("error") or ""
+            lines.append(f"{icons.get(st.status, '•')} {st.kind}:{st.name} {summary}"[:200])
         return Reply("\n".join(lines))
 
     async def cmd_pause(self, s: AsyncSession, user: User, args, raw, key) -> Reply:

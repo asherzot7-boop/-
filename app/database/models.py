@@ -269,3 +269,7 @@ class Setting(TimestampMixin, Base):
 
     key: Mapped[str] = mapped_column(String(100), unique=True, nullable=False)
     value: Mapped[str] = mapped_column(Text, nullable=False)
+
+
+# Agent workflow tables live in their own module but share this metadata.
+from app.agentic import models as _agentic_models  # noqa: F401

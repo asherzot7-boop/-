@@ -13,8 +13,8 @@ from app.database.models import ApprovalKind, utcnow
 from app.services import approvals, books, finance
 from app.services.finance import CATEGORY_NAMES, fmt_money
 
-_COST = re.compile(r"таннарх|tannarx|себестоим", re.I)
-_PAY = re.compile(r"тўла|тўлов|to'la|to'lov|toʻlov|ўтказ|o'tkaz", re.I)
+_COST = re.compile(r"таннарх|tannarx|себестоим", re.IGNORECASE)
+_PAY = re.compile(r"тўла|тўлов|to'la|to'lov|toʻlov|ўтказ|o'tkaz", re.IGNORECASE)
 
 
 class FinanceAgent(BaseAgent):

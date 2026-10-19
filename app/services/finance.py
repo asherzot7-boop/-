@@ -40,7 +40,7 @@ def categorize(text: str) -> str:
     return "other"
 
 
-def fmt_money(amount: int | float) -> str:
+def fmt_money(amount: float) -> str:
     return f"{round(amount):,}".replace(",", " ") + " сўм"
 
 

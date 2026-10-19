@@ -28,7 +28,7 @@ def make_settings(tmp_path, **kw) -> Settings:
     return Settings(_env_file=None, **base)
 
 
-async def build_env(settings: Settings, coordinator: Coordinator | None = None, create: bool = True) -> SimpleNamespace:
+async def build_env(settings: Settings, coordinator: Coordinator | None = None, create: bool = True, model=None) -> SimpleNamespace:
     reporting.register_event_handlers()
     engine = make_engine(settings.database_url)
     if create:
@@ -39,7 +39,12 @@ async def build_env(settings: Settings, coordinator: Coordinator | None = None, 
     async with sf() as s:
         await sync_users(s, settings.director_ids, settings.staff_ids, settings.viewer_ids)
     coordinator = coordinator or Coordinator(MockLLM())
-    return SimpleNamespace(settings=settings, engine=engine, sf=sf, coordinator=coordinator, service=CommandService(sf, coordinator, settings))
+    from app.agentic.llm import RuleToolModel
+    from app.agentic.runtime import AgentRuntime
+
+    runtime = AgentRuntime(model or RuleToolModel())
+    return SimpleNamespace(settings=settings, engine=engine, sf=sf, coordinator=coordinator, runtime=runtime,
+                           service=CommandService(sf, coordinator, settings, runtime=runtime))
 
 
 @pytest.fixture

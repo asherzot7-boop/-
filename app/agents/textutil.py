@@ -6,7 +6,7 @@ import re
 QUOTED = re.compile(r"[«\"“]([^»\"”]{2,})[»\"”]")
 ID_REF = re.compile(r"#\s?(\d+)")
 PERCENT = re.compile(r"(\d+(?:[.,]\d+)?)\s?%")
-AMOUNT = re.compile(r"(\d[\d\s]{0,15}\d|\d)\s*(?:сўм|so'm|som|сум|uzs)?", re.I)
+AMOUNT = re.compile(r"(\d[\d\s]{0,15}\d|\d)\s*(?:сўм|so'm|som|сум|uzs)?", re.IGNORECASE)
 TEXT_MARKERS = ("матн:", "matn:", "текст:", "text:")
 
 

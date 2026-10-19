@@ -22,6 +22,8 @@ COMMAND_ROLE: dict[str, Role] = {
     "report": Role.VIEWER,
     "agents": Role.VIEWER,
     "task": Role.STAFF,
+    "ai": Role.STAFF,
+    "flow": Role.VIEWER,
     "approve": Role.DIRECTOR,
     "pause": Role.DIRECTOR,
     "resume": Role.DIRECTOR,

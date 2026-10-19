@@ -3,7 +3,6 @@ import os
 import sqlite3
 
 import pytest
-
 from alembic import command
 from alembic.autogenerate import compare_metadata
 from alembic.migration import MigrationContext

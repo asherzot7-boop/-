@@ -9,9 +9,9 @@ from app.agents.textutil import extract_id, extract_title
 from app.database.models import ApprovalKind, BookStage
 from app.services import approvals, books
 
-_CREATE = re.compile(r"\b(оч|оч[иі]ш|яра?т|янги\s+\w*\s*лойиҳа|loyiha\w*\s+och|yangi)", re.I)
-_PRINT = re.compile(r"босмахона|босмага|bosmaxona|bosmaga|чоп\s+эт", re.I)
-_RUN = re.compile(r"(\d[\d\s]*)\s*(?:нусха|дона|tiraj|nusxa|тираж)", re.I)
+_CREATE = re.compile(r"\b(оч|оч[иі]ш|яра?т|янги\s+\w*\s*лойиҳа|loyiha\w*\s+och|yangi)", re.IGNORECASE)
+_PRINT = re.compile(r"босмахона|босмага|bosmaxona|bosmaga|чоп\s+эт", re.IGNORECASE)
+_RUN = re.compile(r"(\d[\d\s]*)\s*(?:нусха|дона|tiraj|nusxa|тираж)", re.IGNORECASE)
 
 
 class ProductionAgent(BaseAgent):
