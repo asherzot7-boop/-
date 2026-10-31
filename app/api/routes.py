@@ -65,11 +65,28 @@ async def list_approvals(request: Request) -> list[dict]:
         return [{"id": a.id, "kind": a.kind.value, "title": a.title, "created_at": a.created_at.isoformat()} for a in await approvals.pending(s)]
 
 
-def create_api(settings, session_factory) -> FastAPI:
+@api.get("/leads")
+async def list_leads(request: Request, limit: int = 50) -> list[dict]:
+    from app.salesbot.models import Lead
+
+    async with request.app.state.session_factory() as s:
+        rows = await s.scalars(select(Lead).order_by(Lead.id.desc()).limit(min(max(limit, 1), 500)))
+        return [{"id": x.id, "channel": x.channel, "stage": x.stage.value, "language": x.language, "name": x.name, "phone": x.phone,
+                 "product": x.product_name, "quantity": x.quantity, "total": x.total, "order_id": x.order_id,
+                 "last_message_at": x.last_message_at.isoformat()} for x in rows]
+
+
+def create_api(settings, session_factory, sales=None, meta_sender=None) -> FastAPI:
+    from app.salesbot.channels.meta import MetaSender
+    from app.salesbot.routes import router as sales_router
+
     app = FastAPI(title="Nashriyot AI", version="0.1.0", docs_url="/docs" if settings.api_token else None, redoc_url=None)
     app.state.settings = settings
     app.state.session_factory = session_factory
+    app.state.sales = sales
+    app.state.meta_sender = meta_sender or MetaSender(settings)
     app.include_router(router)
     app.include_router(api)
+    app.include_router(sales_router)
     return app
 

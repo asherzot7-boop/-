@@ -4,6 +4,7 @@
     python -m app.main demo       # interactive console that behaves like the bot
     python -m app.main migrate    # only apply database migrations
     python -m app.main seed       # add sample data for a demo
+    python -m app.main sales      # chat with the sales agent as a client
 """
 from __future__ import annotations
 
@@ -36,6 +37,7 @@ class Container:
     session_factory: async_sessionmaker[AsyncSession]
     coordinator: Coordinator
     service: CommandService
+    sales: object | None = None
 
 
 async def build_container(settings: Settings) -> Container:
@@ -49,7 +51,12 @@ async def build_container(settings: Settings) -> Container:
     async with sf() as session:
         await sync_users(session, directors, settings.staff_ids, settings.viewer_ids)
     coordinator = Coordinator(build_llm(settings))
-    return Container(settings, engine, sf, coordinator, CommandService(sf, coordinator, settings, runtime=build_runtime(settings)))
+    sales = None
+    if settings.sales_enabled:
+        from app.salesbot.agent import SalesAgent, build_sales_model
+
+        sales = SalesAgent(sf, settings, model=build_sales_model(settings))
+    return Container(settings, engine, sf, coordinator, CommandService(sf, coordinator, settings, runtime=build_runtime(settings)), sales)
 
 
 def build_runtime(settings: Settings):
@@ -68,7 +75,7 @@ async def _serve_api(c: Container) -> None:
 
     from app.api.routes import create_api
 
-    config = uvicorn.Config(create_api(c.settings, c.session_factory), host=c.settings.api_host, port=c.settings.api_port, log_level="warning")
+    config = uvicorn.Config(create_api(c.settings, c.session_factory, sales=c.sales), host=c.settings.api_host, port=c.settings.api_port, log_level="warning")
     await uvicorn.Server(config).serve()
 
 
@@ -78,12 +85,24 @@ async def run(settings: Settings) -> None:
 
     c = await build_container(settings)
     jobs: list[asyncio.Task] = []
+    sales_bot = None
+    if c.sales is not None and settings.sales_bot_token is not None and settings.sales_bot_token.get_secret_value():
+        from aiogram import Bot
+
+        from app.salesbot.channels.telegram import build_sales_dispatcher
+
+        sales_bot = Bot(settings.sales_bot_token.get_secret_value())
+        sales_dp = build_sales_dispatcher(c.sales)
+        jobs.append(asyncio.create_task(sales_dp.start_polling(sales_bot, handle_signals=False), name="sales-bot"))
+        log.info("Мижозлар учун сотув боти ишга тушди")
     if settings.api_enabled:
         jobs.append(asyncio.create_task(_serve_api(c), name="api"))
         log.info("API: http://%s:%s/health", settings.api_host, settings.api_port)
 
     if settings.demo_mode:
         log.warning("BOT_TOKEN берилмаган — DEMO режим. Telegram уланмайди. Консолда синаш: python -m app.main demo")
+        if c.sales is not None:
+            c.sales.notifier = TelegramNotifier(sales_bot) if sales_bot else ConsoleNotifier()
         jobs.append(asyncio.create_task(scheduler_loop(c.session_factory, ConsoleNotifier(), settings), name="automation"))
         await asyncio.gather(*jobs)
         return
@@ -94,6 +113,8 @@ async def run(settings: Settings) -> None:
 
     bot = Bot(settings.bot_token.get_secret_value())
     dp = build_dispatcher(c.service, c.session_factory)
+    if c.sales is not None:
+        c.sales.notifier = TelegramNotifier(bot)  # managers get orders in the staff bot
     jobs.append(asyncio.create_task(scheduler_loop(c.session_factory, TelegramNotifier(bot), settings), name="automation"))
     try:
         await set_commands(bot)
@@ -104,6 +125,9 @@ async def run(settings: Settings) -> None:
             j.cancel()
         with contextlib.suppress(Exception):
             await bot.session.close()
+        if sales_bot is not None:
+            with contextlib.suppress(Exception):
+                await sales_bot.session.close()
         await c.engine.dispose()
 
 
@@ -125,6 +149,34 @@ async def demo_console(settings: Settings, telegram_id: int) -> None:
         print(reply.text)
         for row in reply.buttons:
             print("   " + "   ".join(f"[{t} → {d}]" for t, d in row))
+    await c.engine.dispose()
+
+
+async def sales_console(settings: Settings, channel: str, client_id: str) -> None:
+    """Talk to the sales agent as a client would (no Instagram/Telegram needed)."""
+    from app.notify import ConsoleNotifier
+
+    c = await build_container(settings)
+    if c.sales is None:
+        print("SALES_ENABLED=false")
+        return
+    c.sales.notifier = ConsoleNotifier()
+    print(f"Сотув агенти: мижоз сифатида ёзинг (канал={channel}). Чиқиш: exit")
+    first = await c.sales.handle(channel, client_id, "")
+    print(first.text)
+    loop = asyncio.get_running_loop()
+    while True:
+        try:
+            line = await loop.run_in_executor(None, input, "мижоз> ")
+        except (EOFError, KeyboardInterrupt):
+            break
+        if line.strip() in {"exit", "quit", "чиқиш"}:
+            break
+        reply = await c.sales.handle(channel, client_id, line)
+        print(reply.text or "(жим — менежер жавоб беради)")
+        for tid, text in c.sales.notifier.sent:
+            print(f"   [менежерга → {tid}] " + text.replace("\n", "\n   "))
+        c.sales.notifier.sent.clear()
     await c.engine.dispose()
 
 
@@ -152,8 +204,9 @@ async def seed(settings: Settings) -> None:
 
 def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser(prog="python -m app.main")
-    parser.add_argument("mode", nargs="?", default="run", choices=["run", "demo", "migrate", "seed"])
+    parser.add_argument("mode", nargs="?", default="run", choices=["run", "demo", "migrate", "seed", "sales"])
     parser.add_argument("--as-id", type=int, default=None, help="demo: Telegram ID (default: first director)")
+    parser.add_argument("--channel", default="console", help="sales: channel name to simulate (instagram, whatsapp, telegram, phone)")
     a = parser.parse_args(argv)
 
     settings = get_settings()
@@ -163,6 +216,8 @@ def main(argv: list[str] | None = None) -> None:
         log.info("Миграциялар қўлланди")
     elif a.mode == "demo":
         asyncio.run(demo_console(settings, a.as_id or (settings.director_ids[0] if settings.director_ids else DEMO_DIRECTOR_ID)))
+    elif a.mode == "sales":
+        asyncio.run(sales_console(settings, a.channel, "console-client"))
     elif a.mode == "seed":
         asyncio.run(seed(settings))
     else:

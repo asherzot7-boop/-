@@ -53,6 +53,7 @@ HELP = """Nashriyot AI — буйруқлар
 /agents — агентлар ҳолати
 /ai <мақсад> — агентли режим: AI асбобларни ўзи чақиради · /flow [id] — жараён қадамлари
 /pause · /resume — автоматик жараёнлар (раҳбар)
+/leads — сотув агенти лидлари (Instagram, WhatsApp, Telegram, телефон) · /lead <id> — ёзишма · /lead bot <id> — ботга қайтариш
 
 Оддий тилда ҳам ёзишингиз мумкин, масалан:
 «Янги дарслик лойиҳасини оч, биринчи бобни муҳаррирга бер, кейин методистга текширтир ва натижани менга юбор»"""
@@ -396,6 +397,52 @@ class CommandService:
             lines.append(f"#{a.id} [{KIND_NAMES[a.kind]}] {a.title} — сўради: {who}, {self._local(a.created_at)}")
             buttons.append([(f"✅ #{a.id}", f"ap:{a.id}:1"), (f"🚫 #{a.id}", f"ap:{a.id}:0")])
         return Reply("\n".join(lines), buttons)
+
+    # ------------------------------------------------------------------ sales agent leads
+    async def cmd_leads(self, s: AsyncSession, user, args, raw, key) -> Reply:
+        from app.salesbot.agent import CHANNEL_NAMES
+        from app.salesbot.models import Lead, LeadStage
+
+        stage_names = {LeadStage.NEW: "янги", LeadStage.NEED: "эҳтиёж", LeadStage.QUANTITY: "миқдор", LeadStage.NAME: "исм",
+                       LeadStage.PHONE: "телефон", LeadStage.ADDRESS: "манзил", LeadStage.CONFIRM: "тасдиқ", LeadStage.WON: "✅ сотилди",
+                       LeadStage.HANDOFF: "🙋 менежерда", LeadStage.LOST: "йўқотилди"}
+        rows = list(await s.scalars(select(Lead).order_by(Lead.last_message_at.desc()).limit(20)))
+        if not rows:
+            return Reply("Лидлар йўқ. Мижозлар Instagram, WhatsApp, Telegram ёки телефон орқали ёзса, шу ерда кўринади.")
+        total = await s.scalar(select(func.count(Lead.id)))
+        won = await s.scalar(select(func.count(Lead.id)).where(Lead.stage == LeadStage.WON))
+        lines = [f"🧲 Лидлар (охирги 20). Жами: {total}, сотилган: {won} ({round(100 * won / total) if total else 0}%)", ""]
+        for x in rows:
+            deal = f" · {x.product_name} × {x.quantity}" if x.product_name and x.quantity else (f" · {x.product_name}" if x.product_name else "")
+            lines.append(f"#{x.id} {CHANNEL_NAMES.get(x.channel, x.channel)} · {x.name or x.display_name or x.external_id} · {stage_names[x.stage]}{deal}")
+        lines.append("\nЁзишма: /lead <id> · Ботга қайтариш: /lead bot <id>")
+        return Reply("\n".join(lines))
+
+    async def cmd_lead(self, s: AsyncSession, user, args, raw, key) -> Reply:
+        from app.salesbot.models import Lead, LeadMessage, LeadStage
+
+        if args and args[0].lower() == "bot":
+            check(user, Role.STAFF)
+            lead = await s.get(Lead, _int(args[1] if len(args) > 1 else "", "лид ID"))
+            if lead is None:
+                raise LookupError("Лид топилмади.")
+            lead.stage = LeadStage.NEED if not lead.product_id else LeadStage.QUANTITY if not lead.quantity else LeadStage.NAME
+            await audit.log_action(s, "lead.back_to_bot", user, "lead", lead.id)
+            return Reply(f"🤖 Лид #{lead.id} яна ботга қайтарилди.")
+        if not args:
+            return Reply("Фойдаланиш: /lead <id>")
+        lead = await s.get(Lead, _int(args[0], "лид ID"))
+        if lead is None:
+            raise LookupError("Лид топилмади.")
+        msgs = list(await s.scalars(select(LeadMessage).where(LeadMessage.lead_id == lead.id).order_by(LeadMessage.id.desc()).limit(30)))[::-1]
+        lines = [f"Лид #{lead.id} · {lead.channel} · {lead.stage.value} · тил: {lead.language}",
+                 f"{lead.name or lead.display_name or '—'} · {lead.phone or '—'} · {lead.address or '—'}"]
+        if lead.product_name:
+            lines.append(f"{lead.product_name} × {lead.quantity or '?'}" + (f" = {fmt_money(lead.total)} сўм" if lead.total else ""))
+        lines.append("")
+        for m in msgs:
+            lines.append(("👤 " if m.direction == "in" else "🤖 ") + m.text)
+        return Reply("\n".join(lines))
 
     async def cmd_agents(self, s: AsyncSession, user, args, raw, key) -> Reply:
         stats = {a.agent: a for a in await reporting.agent_stats(s)}

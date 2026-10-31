@@ -1,0 +1,18 @@
+{
+  "products": [
+    {
+      "id": "ona-tili-5",
+      "name": "Ona tili 5-sinf",
+      "price": 45000,
+      "description": "Yangi dastur asosida, rangli bosma, 160 bet.",
+      "keywords": ["ona tili", "5-sinf", "darslik", "родной язык", "ana dili"]
+    },
+    {
+      "id": "namangan-ertaklari",
+      "name": "Namangan ertaklari",
+      "price": 60000,
+      "description": "Bolalar uchun rasmli ertaklar to'plami, qattiq muqova.",
+      "keywords": ["ertak", "ertaklar", "masal", "skazki", "masallar"]
+    }
+  ]
+}

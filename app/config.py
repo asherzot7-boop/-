@@ -50,7 +50,32 @@ class Settings(BaseSettings):
 
     log_level: str = "INFO"
 
-    @field_validator("director_ids", "staff_ids", "viewer_ids", mode="before")
+    # ---- Sales agent (Instagram / WhatsApp / Telegram / phone) ----
+    sales_enabled: bool = True
+    sales_shop_name: str = "Nashriyot"
+    sales_default_language: str = "uz"  # uz | uzc | tr | ru
+    sales_catalog_path: str | None = "sales_catalog.json"
+    sales_catalog_from_books: bool = True  # also sell books that have a price
+    # Who gets new orders and hand-off requests in Telegram. Empty -> directors.
+    sales_manager_ids: Annotated[list[int], NoDecode] = Field(default_factory=list)
+    # Separate customer-facing Telegram bot (anyone may write to it).
+    sales_bot_token: SecretStr | None = None
+    # Meta (Instagram, WhatsApp Cloud API, Messenger) webhooks: /webhooks/meta
+    meta_verify_token: SecretStr | None = None
+    meta_app_secret: SecretStr | None = None
+    meta_graph_url: str = "https://graph.facebook.com/v21.0"
+    instagram_access_token: SecretStr | None = None
+    messenger_page_token: SecretStr | None = None
+    whatsapp_access_token: SecretStr | None = None
+    whatsapp_phone_number_id: str | None = None
+    # Phone calls through Twilio: /webhooks/twilio/voice
+    twilio_auth_token: SecretStr | None = None
+    sales_public_base_url: str | None = None  # https://your-domain, used to verify Twilio signatures
+    sales_voice_stt_language: str = "uz-UZ"  # speech recognition language
+    sales_voice_tts_language: str = "tr-TR"  # Twilio has no Uzbek voice; Turkish reads Latin Uzbek closest
+    sales_voice_name: str | None = None  # e.g. Polly.Filiz or Google.tr-TR-Standard-A
+
+    @field_validator("director_ids", "staff_ids", "viewer_ids", "sales_manager_ids", mode="before")
     @classmethod
     def _ids(cls, value: object) -> list[int]:
         return _parse_ids(value)
@@ -69,7 +94,8 @@ class Settings(BaseSettings):
 
     def secret_values(self) -> list[str]:
         out = []
-        for s in (self.bot_token, self.openai_api_key, self.api_token):
+        for s in (self.bot_token, self.openai_api_key, self.api_token, self.sales_bot_token, self.meta_verify_token, self.meta_app_secret,
+                  self.instagram_access_token, self.messenger_page_token, self.whatsapp_access_token, self.twilio_auth_token):
             if s is not None and s.get_secret_value():
                 out.append(s.get_secret_value())
         return out

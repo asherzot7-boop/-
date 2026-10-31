@@ -273,3 +273,4 @@ class Setting(TimestampMixin, Base):
 
 # Agent workflow tables live in their own module but share this metadata.
 from app.agentic import models as _agentic_models  # noqa: F401
+from app.salesbot import models as _salesbot_models  # noqa: F401
