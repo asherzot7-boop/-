@@ -55,7 +55,7 @@ class Settings(BaseSettings):
     sales_shop_name: str = "Nashriyot"
     sales_default_language: str = "uz"  # uz | uzc | tr | ru
     sales_catalog_path: str | None = "sales_catalog.json"
-    sales_catalog_from_books: bool = True  # also sell books that have a price
+    sales_catalog_from_books: bool = False  # also sell books from the publishing registry that have a price
     # Who gets new orders and hand-off requests in Telegram. Empty -> directors.
     sales_manager_ids: Annotated[list[int], NoDecode] = Field(default_factory=list)
     # Separate customer-facing Telegram bot (anyone may write to it).

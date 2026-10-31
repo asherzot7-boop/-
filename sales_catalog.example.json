@@ -1,18 +1,311 @@
 {
+  "_comment": "NAMUNA. Narxlar, hujjatlar va tavsiflarni o'zingiznikiga almashtiring. kind=service: 'necha kishi' va 'sana/shahar' so'raladi. price=0 -> 'narxi kelishiladi'. price_from=true -> '150 $ dan'. ask_quantity=false -> 'necha kishi' so'ralmaydi (konsultatsiya).",
   "products": [
     {
-      "id": "ona-tili-5",
-      "name": "Ona tili 5-sinf",
-      "price": 45000,
-      "description": "Yangi dastur asosida, rangli bosma, 160 bet.",
-      "keywords": ["ona tili", "5-sinf", "darslik", "родной язык", "ana dili"]
+      "id": "tr-ikamet",
+      "kind": "service",
+      "name": {
+        "uz": "Turkiyada yashash ruxsatnomasi (ikamet)",
+        "tr": "Türkiye ikamet izni başvurusu",
+        "ru": "ВНЖ в Турции (икамет)"
+      },
+      "price": 150,
+      "currency": "USD",
+      "price_from": true,
+      "description": {
+        "uz": "Hujjatlarni tayyorlash, onlayn ariza, migratsiya xizmatiga yozilish va hamrohlik.",
+        "tr": "Evrak hazırlığı, online başvuru, randevu ve göç idaresinde refakat.",
+        "ru": "Подготовка документов, онлайн-заявка, запись в миграционную службу и сопровождение."
+      },
+      "documents": {
+        "uz": [
+          "Xorijiy pasport (kamida 6 oy amal qiladigan)",
+          "4 ta biometrik foto",
+          "Ijara shartnomasi yoki manzil hujjati",
+          "Tibbiy sug'urta",
+          "Moliyaviy ta'minot (bank ko'chirmasi)"
+        ],
+        "tr": [
+          "Pasaport (en az 6 ay geçerli)",
+          "4 adet biyometrik fotoğraf",
+          "Kira sözleşmesi veya adres belgesi",
+          "Sağlık sigortası",
+          "Maddi yeterlilik (banka hesap dökümü)"
+        ],
+        "ru": [
+          "Загранпаспорт (действует не менее 6 месяцев)",
+          "4 биометрических фото",
+          "Договор аренды или документ об адресе",
+          "Медицинская страховка",
+          "Подтверждение средств (выписка из банка)"
+        ]
+      },
+      "details_question": {
+        "uz": "Turkiyaning qaysi shahrida yashaysiz yoki yashamoqchisiz va qachondan?",
+        "tr": "Türkiye'de hangi şehirde ve ne zamandan beri / ne zamandan itibaren kalacaksınız?",
+        "ru": "В каком городе Турции вы живёте или планируете жить и с какого времени?"
+      },
+      "keywords": [
+        "ikamet",
+        "yashash",
+        "propiska",
+        "внж",
+        "вид на жительство",
+        "residence",
+        "oturum"
+      ]
     },
     {
-      "id": "namangan-ertaklari",
-      "name": "Namangan ertaklari",
-      "price": 60000,
-      "description": "Bolalar uchun rasmli ertaklar to'plami, qattiq muqova.",
-      "keywords": ["ertak", "ertaklar", "masal", "skazki", "masallar"]
+      "id": "tr-ish",
+      "kind": "service",
+      "name": {
+        "uz": "Turkiyada ish ruxsatnomasi",
+        "tr": "Türkiye çalışma izni",
+        "ru": "Разрешение на работу в Турции"
+      },
+      "price": 300,
+      "currency": "USD",
+      "price_from": true,
+      "description": {
+        "uz": "Ish beruvchi bilan hujjatlar, ariza va natijagacha kuzatuv.",
+        "tr": "İşverenle evrak süreci, başvuru ve sonuçlanana kadar takip.",
+        "ru": "Документы с работодателем, подача и сопровождение до результата."
+      },
+      "documents": {
+        "uz": [
+          "Xorijiy pasport",
+          "Biometrik foto",
+          "Diplom yoki malaka hujjati (tarjima bilan)",
+          "Ish beruvchidan taklif / shartnoma"
+        ],
+        "tr": [
+          "Pasaport",
+          "Biyometrik fotoğraf",
+          "Diploma veya yeterlilik belgesi (tercümeli)",
+          "İşverenden teklif / sözleşme"
+        ],
+        "ru": [
+          "Загранпаспорт",
+          "Биометрическое фото",
+          "Диплом или документ о квалификации (с переводом)",
+          "Приглашение / договор от работодателя"
+        ]
+      },
+      "keywords": [
+        "ish",
+        "ishlash",
+        "работа",
+        "работать",
+        "çalışma",
+        "calisma",
+        "iş izni",
+        "work"
+      ]
+    },
+    {
+      "id": "tr-talaba",
+      "kind": "service",
+      "name": {
+        "uz": "Turkiyada o'qish: universitet va talaba vizasi",
+        "tr": "Türkiye'de üniversite kaydı ve öğrenci vizesi",
+        "ru": "Учёба в Турции: поступление и студенческая виза"
+      },
+      "price": 400,
+      "currency": "USD",
+      "price_from": true,
+      "description": {
+        "uz": "Universitet tanlash, hujjat topshirish, qabul xati va talaba vizasi.",
+        "tr": "Üniversite seçimi, başvuru, kabul mektubu ve öğrenci vizesi.",
+        "ru": "Подбор университета, подача документов, письмо о зачислении и студенческая виза."
+      },
+      "keywords": [
+        "o'qish",
+        "oqish",
+        "talaba",
+        "universitet",
+        "student",
+        "учёба",
+        "учеба",
+        "университет",
+        "öğrenci",
+        "ogrenci",
+        "üniversite"
+      ]
+    },
+    {
+      "id": "uz-turk-fuqaro",
+      "kind": "service",
+      "name": {
+        "uz": "O'zbekistonda turk fuqarolari uchun ish ruxsati va ro'yxatga olish",
+        "tr": "Özbekistan'da Türk vatandaşları için çalışma izni ve kayıt",
+        "ru": "Разрешение на работу и регистрация в Узбекистане для граждан Турции"
+      },
+      "price": 250,
+      "currency": "USD",
+      "price_from": true,
+      "description": {
+        "uz": "Hujjatlar, ro'yxatga olish va ish ruxsatini rasmiylashtirish.",
+        "tr": "Evrak, kayıt (propiska) ve çalışma izni işlemleri.",
+        "ru": "Документы, регистрация и оформление разрешения на работу."
+      },
+      "details_question": {
+        "uz": "O'zbekistonning qaysi shahrida va qachondan ishlaysiz?",
+        "tr": "Özbekistan'da hangi şehirde ve ne zamandan itibaren çalışacaksınız?",
+        "ru": "В каком городе Узбекистана и с какого времени вы будете работать?"
+      },
+      "keywords": [
+        "özbekistan",
+        "ozbekistan",
+        "o'zbekiston",
+        "узбекистан",
+        "kayıt",
+        "kayit",
+        "çalışma izni",
+        "registratsiya",
+        "регистрация"
+      ]
+    },
+    {
+      "id": "tur-istanbul",
+      "kind": "service",
+      "name": {
+        "uz": "Istanbul turi (5 kun)",
+        "tr": "İstanbul turu (5 gün)",
+        "ru": "Тур в Стамбул (5 дней)"
+      },
+      "price": 450,
+      "currency": "USD",
+      "price_from": true,
+      "description": {
+        "uz": "Aviachipta, mehmonxona, transfer va ekskursiyalar.",
+        "tr": "Uçak bileti, otel, transfer ve geziler.",
+        "ru": "Авиабилеты, отель, трансфер и экскурсии."
+      },
+      "details_question": {
+        "uz": "Qachon borishni rejalashtiryapsiz va qaysi shahardan uchasiz?",
+        "tr": "Ne zaman gitmeyi planlıyorsunuz?",
+        "ru": "Когда планируете поездку и из какого города вылет?"
+      },
+      "keywords": [
+        "istanbul",
+        "istambul",
+        "стамбул",
+        "tur",
+        "tour",
+        "тур",
+        "sayohat",
+        "dam olish",
+        "otdyx",
+        "отдых",
+        "antalya",
+        "анталья",
+        "turkiya",
+        "турция"
+      ]
+    },
+    {
+      "id": "tur-ozbekiston",
+      "kind": "service",
+      "name": {
+        "uz": "O'zbekiston turi: Toshkent – Samarqand – Buxoro (7 kun)",
+        "tr": "Özbekistan turu: Taşkent – Semerkant – Buhara (7 gün)",
+        "ru": "Тур по Узбекистану: Ташкент – Самарканд – Бухара (7 дней)"
+      },
+      "price": 690,
+      "currency": "USD",
+      "price_from": true,
+      "description": {
+        "uz": "Mehmonxona, poyezd, gid va tarixiy joylar.",
+        "tr": "Otel, hızlı tren, rehber ve tarihi yerler.",
+        "ru": "Отели, поезд, гид и исторические места."
+      },
+      "details_question": {
+        "uz": "Qachon kelishni rejalashtiryapsiz?",
+        "tr": "Ne zaman gelmeyi planlıyorsunuz?",
+        "ru": "Когда планируете приехать?"
+      },
+      "keywords": [
+        "semerkant",
+        "samarqand",
+        "самарканд",
+        "buhara",
+        "buxoro",
+        "бухара",
+        "taşkent",
+        "toshkent",
+        "özbekistan turu",
+        "gezi",
+        "tatil"
+      ]
+    },
+    {
+      "id": "biznes",
+      "kind": "service",
+      "name": {
+        "uz": "Biznes konsalting: Turkiya yoki O'zbekistonda firma ochish",
+        "tr": "İş danışmanlığı: Türkiye veya Özbekistan'da şirket kurulumu",
+        "ru": "Бизнес-консалтинг: открытие компании в Турции или Узбекистане"
+      },
+      "price": 500,
+      "currency": "USD",
+      "price_from": true,
+      "description": {
+        "uz": "Firma ro'yxatdan o'tkazish, bank hisobi, soliq va hamkor qidirish.",
+        "tr": "Şirket kuruluşu, banka hesabı, vergi ve ortak bulma.",
+        "ru": "Регистрация компании, банковский счёт, налоги и поиск партнёров."
+      },
+      "details_question": {
+        "uz": "Qaysi davlatda va qanday faoliyat uchun firma ochmoqchisiz?",
+        "tr": "Hangi ülkede ve hangi faaliyet için şirket kurmak istiyorsunuz?",
+        "ru": "В какой стране и для какой деятельности хотите открыть компанию?"
+      },
+      "keywords": [
+        "firma",
+        "kompaniya",
+        "biznes",
+        "şirket",
+        "sirket",
+        "компания",
+        "фирма",
+        "бизнес",
+        "ооо",
+        "mchj"
+      ],
+      "ask_quantity": false
+    },
+    {
+      "id": "konsultatsiya",
+      "kind": "service",
+      "name": {
+        "uz": "Konsultatsiya (viza, yashash, ish, o'qish)",
+        "tr": "Danışmanlık görüşmesi (vize, ikamet, çalışma, eğitim)",
+        "ru": "Консультация (виза, ВНЖ, работа, учёба)"
+      },
+      "price": 200000,
+      "currency": "so'm",
+      "description": {
+        "uz": "Holatingizni ko'rib chiqib, qaysi yo'l mos kelishini aytamiz (ofisda yoki onlayn).",
+        "tr": "Durumunuzu inceleyip size uygun yolu anlatıyoruz (ofiste veya online).",
+        "ru": "Разберём вашу ситуацию и подскажем подходящий путь (в офисе или онлайн)."
+      },
+      "details_question": {
+        "uz": "Konsultatsiya uchun qulay kun va vaqtni yozing (masalan: ertaga 15:00, onlayn).",
+        "tr": "Görüşme için uygun gün ve saati yazın (ör. yarın 15:00, online).",
+        "ru": "Напишите удобные день и время консультации (например: завтра 15:00, онлайн)."
+      },
+      "keywords": [
+        "konsultatsiya",
+        "maslahat",
+        "danışman",
+        "danisman",
+        "danışmanlık",
+        "консультация",
+        "viza",
+        "vize",
+        "visa",
+        "виза"
+      ],
+      "ask_quantity": false
     }
   ]
 }

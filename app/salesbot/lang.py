@@ -125,18 +125,18 @@ def normalize(text: str) -> str:
 # ----------------------------------------------------------------- reply texts
 TEXTS: dict[str, dict[str, str]] = {
     "uz": {
-        "greet": "Assalomu alaykum{name}! 😊 {shop} savdo bo'limiman. Sizga nima kerak? Bizda:\n{catalog}",
-        "greet_voice": "Assalomu alaykum! {shop}ga qo'ng'iroq qilganingiz uchun rahmat. Qaysi mahsulot sizni qiziqtiradi?",
-        "ask_need": "Qaysi mahsulot qiziqtiradi? Bizda:\n{catalog}\nNomini yozing — narxi va shartlarini aytaman.",
+        "greet": "Assalomu alaykum{name}! 😊 Men {shop} yordamchisiman. Sizni nima qiziqtiradi? Bizda:\n{catalog}",
+        "greet_voice": "Assalomu alaykum! {shop}ga qo'ng'iroq qilganingiz uchun rahmat. Sizni qaysi xizmat qiziqtiradi?",
+        "ask_need": "Sizni nima qiziqtiradi? Bizda:\n{catalog}\nQaysi biri kerakligini yozing — narxi va shartlarini aytaman.",
         "empty_catalog": "Hozir menejerimiz sizga mos taklifni aytadi. Telefon raqamingizni qoldiring.",
-        "offer": "{product} — {price} so'm.{desc}\nNechta kerak bo'ladi?",
+        "offer": "{product} — {price}.{desc}\nNechta kerak bo'ladi?",
         "ask_qty": "Nechta {product} kerak? Sonini yozing (masalan: 3).",
         "objection": "Tushunaman. {product} — sifatli va narxi bozorga mos. Ko'p miqdorda olsangiz, menejerimiz alohida chegirma taklif qilishi mumkin — so'rovingizni yetkazdim. Hozircha nechta kerak?",
         "ask_name": "Ajoyib! Buyurtmani rasmiylashtiramiz: ismingiz nima?",
         "ask_phone": "Rahmat, {name}! Telefon raqamingizni yozing (masalan: +998 90 123 45 67).",
         "bad_phone": "Raqam to'liq emas. Iltimos, kod bilan yozing: +998 90 123 45 67.",
         "ask_address": "Yetkazib berish manzilini yozing (shahar, ko'cha, uy). O'zingiz olib ketsangiz, «olib ketaman» deb yozing.",
-        "confirm": "Buyurtmangizni tekshiring:\n• {product} × {qty} = {total} so'm\n• {name}, {phone}\n• {address}\nHammasi to'g'rimi? «Ha» deb yozing yoki nimani o'zgartirishni ayting.",
+        "confirm": "Buyurtmangizni tekshiring:\n• {product} × {qty} = {total}\n• {name}, {phone}\n• {address}\nHammasi to'g'rimi? «Ha» deb yozing yoki nimani o'zgartirishni ayting.",
         "fix": "Mayli, nimani o'zgartiramiz? To'g'ri ma'lumotni yozing (son, telefon yoki manzil).",
         "won": "Rahmat! Buyurtmangiz №{id} qabul qilindi ✅ Menejerimiz tez orada bog'lanib, to'lov va yetkazishni tasdiqlaydi.",
         "after_won": "Buyurtmangiz №{id} qabul qilingan, menejer bog'lanadi. Yana biror narsa kerakmi?",
@@ -145,20 +145,29 @@ TEXTS: dict[str, dict[str, str]] = {
         "bye_voice": "Rahmat, xayr! Yaxshi kun tilaymiz.",
         "noinput_voice": "Kechirasiz, eshitmadim. Iltimos, qaytadan ayting.",
         "phone_button": "📞 Raqamni yuborish",
+        "offer_service": "{product} — {price}.{desc}\nNecha kishi uchun?",
+        "ask_name_service": "Ajoyib! Arizani rasmiylashtiramiz: ismingiz nima?",
+        "ask_qty_service": "Necha kishi uchun {product}? Sonini yozing (masalan: 2).",
+        "ask_details": "Rejangizni qisqacha yozing: qachon va qaysi shaharga (masalan: dekabr, Istanbul).",
+        "confirm_service": "Arizangizni tekshiring:\n• {product}, {qty} kishi — {total}\n• {name}, {phone}\n• {address}\nHammasi to'g'rimi? «Ha» deb yozing yoki nimani o'zgartirishni ayting.",
+        "won_service": "Rahmat! Arizangiz №{id} qabul qilindi ✅ Konsultantimiz tez orada bog'lanib, hujjatlar ro'yxati va keyingi qadamlarni aytadi.",
+        "docs": "{product} uchun odatda kerak bo'ladigan hujjatlar:\n{docs}\nAniq ro'yxatni konsultantimiz holatingizga qarab tasdiqlaydi.",
+        "docs_none": "Hujjatlar ro'yxati holatingizga bog'liq — konsultantimiz aniq aytib beradi.",
+        "price_note": "Yakuniy narxni konsultant holatingizga qarab aytadi.",
     },
     "tr": {
-        "greet": "Merhaba{name}! 😊 {shop} satış ekibiyim. Size nasıl yardımcı olabilirim? Ürünlerimiz:\n{catalog}",
-        "greet_voice": "Merhaba! {shop}'i aradığınız için teşekkürler. Hangi ürünle ilgileniyorsunuz?",
-        "ask_need": "Hangi ürünle ilgileniyorsunuz? Ürünlerimiz:\n{catalog}\nÜrün adını yazın, fiyat ve koşulları söyleyeyim.",
+        "greet": "Merhaba{name}! 😊 Ben {shop} asistanıyım. Size nasıl yardımcı olabilirim? Hizmetlerimiz:\n{catalog}",
+        "greet_voice": "Merhaba! {shop}'i aradığınız için teşekkürler. Hangi hizmetle ilgileniyorsunuz?",
+        "ask_need": "Neyle ilgileniyorsunuz? Hizmetlerimiz:\n{catalog}\nHangisini istediğinizi yazın, fiyat ve koşulları söyleyeyim.",
         "empty_catalog": "Yöneticimiz size uygun teklifi iletecek. Lütfen telefon numaranızı bırakın.",
-        "offer": "{product} — {price} so'm.{desc}\nKaç adet istersiniz?",
+        "offer": "{product} — {price}.{desc}\nKaç adet istersiniz?",
         "ask_qty": "Kaç adet {product} istersiniz? Lütfen sayı yazın (ör. 3).",
         "objection": "Anlıyorum. {product} kaliteli ve fiyatı piyasaya uygun. Çok adet alırsanız yöneticimiz özel indirim sunabilir — talebinizi ilettim. Şimdilik kaç adet istersiniz?",
         "ask_name": "Harika! Siparişinizi oluşturalım: adınız nedir?",
         "ask_phone": "Teşekkürler, {name}! Telefon numaranızı yazar mısınız? (ör. +90 532 123 45 67)",
         "bad_phone": "Numara eksik görünüyor. Lütfen ülke koduyla yazın: +90 532 123 45 67.",
         "ask_address": "Teslimat adresini yazın (şehir, sokak, numara). Kendiniz alacaksanız «gelip alırım» yazın.",
-        "confirm": "Siparişinizi kontrol edin:\n• {product} × {qty} = {total} so'm\n• {name}, {phone}\n• {address}\nHer şey doğru mu? «Evet» yazın ya da neyi değiştireceğimizi söyleyin.",
+        "confirm": "Siparişinizi kontrol edin:\n• {product} × {qty} = {total}\n• {name}, {phone}\n• {address}\nHer şey doğru mu? «Evet» yazın ya da neyi değiştireceğimizi söyleyin.",
         "fix": "Tamam, neyi değiştirelim? Doğru bilgiyi yazın (adet, telefon veya adres).",
         "won": "Teşekkürler! №{id} numaralı siparişiniz alındı ✅ Yöneticimiz kısa süre içinde ödeme ve teslimatı onaylamak için sizi arayacak.",
         "after_won": "№{id} numaralı siparişiniz alındı, yöneticimiz sizi arayacak. Başka bir şey ister misiniz?",
@@ -167,20 +176,29 @@ TEXTS: dict[str, dict[str, str]] = {
         "bye_voice": "Teşekkürler, iyi günler!",
         "noinput_voice": "Özür dilerim, duyamadım. Lütfen tekrar söyler misiniz?",
         "phone_button": "📞 Numaramı gönder",
+        "offer_service": "{product} — {price}.{desc}\nKaç kişi için?",
+        "ask_name_service": "Harika! Başvurunuzu oluşturalım: adınız nedir?",
+        "ask_qty_service": "{product} kaç kişi için? Lütfen sayı yazın (ör. 2).",
+        "ask_details": "Planınızı kısaca yazın: ne zaman ve hangi şehre (ör. aralık, Taşkent).",
+        "confirm_service": "Başvurunuzu kontrol edin:\n• {product}, {qty} kişi — {total}\n• {name}, {phone}\n• {address}\nHer şey doğru mu? «Evet» yazın ya da neyi değiştireceğimizi söyleyin.",
+        "won_service": "Teşekkürler! №{id} numaralı başvurunuz alındı ✅ Danışmanımız kısa süre içinde sizi arayıp gerekli belgeleri ve sonraki adımları anlatacak.",
+        "docs": "{product} için genellikle gereken belgeler:\n{docs}\nKesin listeyi danışmanımız durumunuza göre onaylar.",
+        "docs_none": "Belge listesi durumunuza göre değişir — danışmanımız size net bilgi verecek.",
+        "price_note": "Kesin fiyatı danışmanımız durumunuza göre belirler.",
     },
     "ru": {
-        "greet": "Здравствуйте{name}! 😊 Это отдел продаж {shop}. Что вас интересует? У нас есть:\n{catalog}",
-        "greet_voice": "Здравствуйте! Спасибо, что позвонили в {shop}. Какой товар вас интересует?",
-        "ask_need": "Какой товар вас интересует? У нас есть:\n{catalog}\nНапишите название — скажу цену и условия.",
+        "greet": "Здравствуйте{name}! 😊 Я помощник {shop}. Что вас интересует? Мы предлагаем:\n{catalog}",
+        "greet_voice": "Здравствуйте! Спасибо, что позвонили в {shop}. Какая услуга вас интересует?",
+        "ask_need": "Что вас интересует? Мы предлагаем:\n{catalog}\nНапишите, что нужно — скажу цену и условия.",
         "empty_catalog": "Наш менеджер подберёт для вас предложение. Оставьте, пожалуйста, номер телефона.",
-        "offer": "{product} — {price} сум.{desc}\nСколько штук вам нужно?",
+        "offer": "{product} — {price}.{desc}\nСколько штук вам нужно?",
         "ask_qty": "Сколько штук {product} вам нужно? Напишите число (например: 3).",
         "objection": "Понимаю. {product} — качественный товар по рыночной цене. При большом объёме менеджер может предложить скидку — я передал ваш запрос. Сколько штук вам нужно сейчас?",
         "ask_name": "Отлично! Оформим заказ: как вас зовут?",
         "ask_phone": "Спасибо, {name}! Напишите номер телефона (например: +998 90 123 45 67).",
         "bad_phone": "Номер неполный. Напишите с кодом: +998 90 123 45 67.",
         "ask_address": "Напишите адрес доставки (город, улица, дом). Если заберёте сами — напишите «самовывоз».",
-        "confirm": "Проверьте заказ:\n• {product} × {qty} = {total} сум\n• {name}, {phone}\n• {address}\nВсё верно? Напишите «Да» или что нужно изменить.",
+        "confirm": "Проверьте заказ:\n• {product} × {qty} = {total}\n• {name}, {phone}\n• {address}\nВсё верно? Напишите «Да» или что нужно изменить.",
         "fix": "Хорошо, что изменить? Напишите правильные данные (количество, телефон или адрес).",
         "won": "Спасибо! Заказ №{id} принят ✅ Менеджер скоро свяжется с вами для подтверждения оплаты и доставки.",
         "after_won": "Ваш заказ №{id} принят, менеджер свяжется с вами. Нужно что-нибудь ещё?",
@@ -189,6 +207,15 @@ TEXTS: dict[str, dict[str, str]] = {
         "bye_voice": "Спасибо, до свидания!",
         "noinput_voice": "Извините, не расслышал. Повторите, пожалуйста.",
         "phone_button": "📞 Отправить номер",
+        "offer_service": "{product} — {price}.{desc}\nНа сколько человек?",
+        "ask_name_service": "Отлично! Оформим заявку: как вас зовут?",
+        "ask_qty_service": "На сколько человек {product}? Напишите число (например: 2).",
+        "ask_details": "Коротко опишите план: когда и в какой город (например: декабрь, Стамбул).",
+        "confirm_service": "Проверьте заявку:\n• {product}, {qty} чел. — {total}\n• {name}, {phone}\n• {address}\nВсё верно? Напишите «Да» или что нужно изменить.",
+        "won_service": "Спасибо! Заявка №{id} принята ✅ Консультант скоро свяжется с вами и расскажет, какие документы нужны и что дальше.",
+        "docs": "Для услуги «{product}» обычно нужны документы:\n{docs}\nТочный список консультант подтвердит под вашу ситуацию.",
+        "docs_none": "Список документов зависит от ситуации — консультант скажет точно.",
+        "price_note": "Окончательную цену консультант назовёт после оценки вашей ситуации.",
     },
 }
 
@@ -202,7 +229,7 @@ def text(lang: str, key: str, **kw) -> str:
     return template.format(**kw)
 
 
-_TRANSLIT_KEYS = {"product", "desc", "catalog"}
+_TRANSLIT_KEYS = {"product", "desc", "catalog", "docs"}
 
 
 # ----------------------------------------------------------------- vocabularies for intent detection
@@ -218,4 +245,5 @@ DISCOUNT = re.compile(r"chegirma|skidka|indirim|arzonroq|arzonlashtir|ucuz|kampa
 EXPENSIVE = re.compile(r"qimmat|pahal|dorogo|dorogovato|ko'p\s+pul", re.IGNORECASE)
 PICKUP = re.compile(r"olib\s+ketaman|o'zim\s+olaman|o'zim\s+kelaman|gelip\s+al|kendim\s+al|samovyvoz|sam\s+zaber|zaberu", re.IGNORECASE)
 BUY = re.compile(r"olaman|olmoqchi|sotib|buyurtma|zakaz|kerak|almak|istiyorum|sipariş|siparis|alayım|kupit|xochu|nujno|nujna|beraman", re.IGNORECASE)
+DOCS = re.compile(r"hujjat|xujjat|документ|dokument|belge|evrak|nima\s+kerak\s+bo'ladi|nimalar\s+kerak|ne\s+gerekli|neler\s+gerekli|что\s+нужно", re.IGNORECASE)
 PRICE = re.compile(r"narx|qancha|necha\s+pul|fiyat|ne\s+kadar|kaç\s+para|tsena|skolko|stoit|price", re.IGNORECASE)

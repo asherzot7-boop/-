@@ -23,7 +23,7 @@ MANAGER = 777
 
 @pytest.fixture
 async def sales(tmp_path):
-    settings = make_settings(tmp_path, sales_catalog_path=None, sales_manager_ids=[MANAGER], meta_app_secret="appsecret",
+    settings = make_settings(tmp_path, sales_catalog_path=None, sales_catalog_from_books=True, sales_manager_ids=[MANAGER], meta_app_secret="appsecret",
                              meta_verify_token="verify-me", twilio_auth_token="twiliotoken", sales_public_base_url="https://shop.example")
     e = await build_env(settings)
     async with e.sf() as s:
@@ -210,3 +210,44 @@ async def test_twilio_voice_call(sales):
     assert "Buyurtmangizni tekshiring" in said[3] and "+998901112233" in said[3]  # caller ID is the phone, never asked
     assert "<Hangup/>" in said[4] and "qabul qilindi" in said[4]
     assert "✅" not in said[4]  # emojis are not read aloud
+
+
+# ------------------------------------------------------------------ services: visa, tours, consulting
+@pytest.fixture
+async def services(tmp_path):
+    from pathlib import Path
+
+    catalog = Path(__file__).resolve().parents[1] / "sales_catalog.example.json"
+    settings = make_settings(tmp_path, sales_catalog_path=str(catalog), sales_catalog_from_books=False, sales_manager_ids=[MANAGER],
+                             sales_shop_name="Visa & Travel")
+    e = await build_env(settings)
+    e.notifier = ConsoleNotifier()
+    e.agent = SalesAgent(e.sf, settings, notifier=e.notifier)
+    yield e
+    await e.engine.dispose()
+
+
+async def test_visa_service_with_documents(services):
+    r = await talk(services.agent, ["Assalomu alaykum", "Turkiyada ikamet qilish kerak, qanday hujjatlar kerak?", "2 kishi", "Ismim Sardor",
+                                    "+998 90 111 22 33", "Istanbul, yanvardan", "ha"])
+    assert "150 $ dan" in r[0].text and "200 000 so'm" in r[0].text
+    assert "Ijara shartnomasi" in r[1].text and "Necha kishi" in r[1].text
+    assert "Arizani" in r[2].text
+    assert "qaysi shahrida" in r[4].text  # the service's own question replaces "delivery address"
+    assert "2 kishi — 300 $ dan" in r[5].text
+    assert r[6].done and "Arizangiz" in r[6].text
+    card = services.notifier.sent[-1][1]
+    assert "Янги ариза" in card and "Сана / шаҳар: Istanbul, yanvardan" in card
+
+
+async def test_turkish_tour_names_are_in_turkish(services):
+    r = await talk(services.agent, ["Merhaba, Semerkant Buhara turu var mı?", "4 kişi", "Mehmet", "0532 111 22 33", "Nisan ayında", "evet"], who="tr")
+    assert r[0].text.startswith("Özbekistan turu: Taşkent") and "690 $ ve üzeri" in r[0].text and "Kaç kişi" in r[0].text
+    assert "4 kişi — 2 760 $ ve üzeri" in r[4].text
+    assert r[5].done and "başvurunuz alındı" in r[5].text
+
+
+async def test_consultation_skips_quantity(services):
+    r = await talk(services.agent, ["Здравствуйте, нужна консультация по визе", "Анна"], who="ru")
+    assert "200 000 сум" in r[0].text and "как вас зовут" in r[0].text
+    assert "телефон" in r[1].text
