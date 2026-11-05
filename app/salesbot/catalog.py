@@ -58,6 +58,7 @@ class Product:
     prepayment: int = 0  # advance payment per person/unit, same currency; 0 -> none
     result_time: str | dict | None = None  # e.g. {"uz": "12 soatda", "tr": "12 saatte"}
     next_offers: dict = field(default_factory=dict)  # result -> product id offered next, e.g. {"ban": "deport"}
+    required_docs: list = field(default_factory=list)  # [{"id", "name": {lang: text}, "keywords": [...]}] checklist after the application
 
     @property
     def is_service(self) -> bool:
@@ -115,6 +116,7 @@ def _product(item: dict) -> Product:
         ask_quantity=bool(item.get("ask_quantity", True)), prepayment=int(item.get("prepayment", 0)),
         result_time=item.get("result_time"),
         next_offers=dict(item.get("next_offers") or {}),
+        required_docs=list(item.get("required_docs") or []),
     )
 
 

@@ -159,6 +159,14 @@ TEXTS: dict[str, dict[str, str]] = {
         "result_time": "Natija: {time}.",
         "consent": "Hujjatlaringizni faqat arizangizni rasmiylashtirish uchun shifrlangan holda saqlaymiz va xizmat tugagach {days} kundan keyin o'chiramiz. Rozimisiz? «Roziman» deb yozing, keyin hujjatni qayta yuboring.",
         "consent_ok": "Rahmat! Endi hujjatni qayta yuboring.",
+        "docs_state": "Qabul qilingan: {got}\nQoldi: {left}",
+        "docs_done": "Barcha hujjatlar qabul qilindi ✅",
+        "docs_reminder": "Assalomu alaykum{name}! Arizangiz №{id} uchun hujjatlar yetishmayapti: {left}. PDF yoki rasm qilib shu yerga yuboring.",
+        "status_names": "Hujjatlar kutilmoqda|Hujjatlar qabul qilindi|Ariza topshirildi|Natija kutilmoqda|Yakunlandi ✅",
+        "status_msg": "Arizangiz №{id} holati: {status}.{note}",
+        "review_ask": "Xizmatimizni 1 dan 5 gacha baholang (raqam yozing). Fikringiz biz uchun muhim!",
+        "review_good": "Rahmat! 🙏 Do'stlaringizga tavsiya qiling: ular «{code}» kodini yozsa, menejerimiz alohida taklif beradi.",
+        "review_bad": "Uzr so'raymiz. Rahbariyatimiz siz bilan bog'lanib, nima bo'lganini so'raydi.",
         "file_received": "Hujjat qabul qilindi ✅ (jami {n} ta). Konsultantimiz ko'rib chiqadi.",
         "file_failed": "Faylni ololmadim. Iltimos, PDF yoki rasm ko'rinishida qayta yuboring.",
         "file_too_big": "Fayl juda katta ({mb} MB dan oshmasin). Iltimos, kichikroq qilib yuboring.",
@@ -211,6 +219,14 @@ TEXTS: dict[str, dict[str, str]] = {
         "result_time": "Sonuç: {time}.",
         "consent": "Belgelerinizi yalnızca başvurunuz için şifreli olarak saklıyor ve hizmet bittikten {days} gün sonra siliyoruz. Onaylıyor musunuz? «Onaylıyorum» yazın, sonra belgeyi tekrar gönderin.",
         "consent_ok": "Teşekkürler! Şimdi belgeyi tekrar gönderin.",
+        "docs_state": "Alınan: {got}\nKalan: {left}",
+        "docs_done": "Tüm belgeler alındı ✅",
+        "docs_reminder": "Merhaba{name}! №{id} numaralı başvurunuz için eksik belgeler: {left}. PDF veya fotoğraf olarak buraya gönderin.",
+        "status_names": "Belgeler bekleniyor|Belgeler alındı|Başvuru yapıldı|Sonuç bekleniyor|Tamamlandı ✅",
+        "status_msg": "№{id} numaralı başvurunuzun durumu: {status}.{note}",
+        "review_ask": "Hizmetimizi 1'den 5'e kadar puanlayın (rakam yazın). Görüşünüz bizim için önemli!",
+        "review_good": "Teşekkürler! 🙏 Arkadaşlarınıza önerin: «{code}» kodunu yazarlarsa yöneticimiz özel teklif sunar.",
+        "review_bad": "Özür dileriz. Yönetimimiz sizinle iletişime geçip ne olduğunu soracak.",
         "file_received": "Belge alındı ✅ (toplam {n}). Danışmanımız inceleyecek.",
         "file_failed": "Dosyayı alamadım. Lütfen PDF veya fotoğraf olarak tekrar gönderin.",
         "file_too_big": "Dosya çok büyük ({mb} MB'ı geçmemeli). Lütfen daha küçük gönderin.",
@@ -263,6 +279,14 @@ TEXTS: dict[str, dict[str, str]] = {
         "result_time": "Результат: {time}.",
         "consent": "Мы храним ваши документы в зашифрованном виде только для оформления заявки и удаляем их через {days} дней после окончания услуги. Вы согласны? Напишите «Согласен», затем отправьте документ ещё раз.",
         "consent_ok": "Спасибо! Теперь отправьте документ ещё раз.",
+        "docs_state": "Получено: {got}\nОсталось: {left}",
+        "docs_done": "Все документы получены ✅",
+        "docs_reminder": "Здравствуйте{name}! Для заявки №{id} не хватает документов: {left}. Пришлите их сюда в PDF или фото.",
+        "status_names": "Ожидаем документы|Документы получены|Заявка подана|Ожидаем результат|Завершено ✅",
+        "status_msg": "Статус заявки №{id}: {status}.{note}",
+        "review_ask": "Оцените нашу работу от 1 до 5 (напишите цифру). Ваше мнение важно для нас!",
+        "review_good": "Спасибо! 🙏 Порекомендуйте нас друзьям: если они напишут код «{code}», менеджер предложит особые условия.",
+        "review_bad": "Приносим извинения. Руководство свяжется с вами и узнает, что пошло не так.",
         "file_received": "Документ получен ✅ (всего {n}). Консультант его посмотрит.",
         "file_failed": "Не удалось получить файл. Пришлите, пожалуйста, ещё раз в виде PDF или фото.",
         "file_too_big": "Файл слишком большой (не больше {mb} МБ). Пришлите, пожалуйста, поменьше.",
@@ -296,6 +320,8 @@ _TRANSLIT_KEYS = {"product", "desc", "catalog", "docs"}
 
 
 # ----------------------------------------------------------------- vocabularies for intent detection
+STATUS_Q = re.compile(r"holat|holati|qayerda|nima bo'ldi|arizam|durum|ne oldu|başvurum|basvurum|статус|где моя|что с заявкой|ҳолат|қаерда|аризам", re.IGNORECASE)
+REFERRAL = re.compile(r"\bNT[- ]?(\d{1,6})\b", re.IGNORECASE)
 CONSENT = re.compile(r"roziman|rozimiz|розиман|onaylıyorum|onayliyorum|kabul ediyorum|согласен|согласна|согласны", re.IGNORECASE)
 YES = {"ha", "xa", "ha'", "albatta", "ok", "okay", "ok'", "bo'ladi", "boladi", "to'g'ri", "togri", "roziman", "mayli", "tasdiqlayman",
        "evet", "tamam", "olur", "doğru", "dogru", "onaylıyorum", "da", "da'", "verno", "xorosho", "podtverjdayu", "aga", "+"}

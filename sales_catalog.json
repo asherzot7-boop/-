@@ -53,7 +53,23 @@
       "next_offers": {
         "ban": "deport",
         "ok": "ish-beruvchi"
-      }
+      },
+      "required_docs": [
+        {
+          "id": "pasport",
+          "name": {
+            "uz": "Pasport rasmi",
+            "tr": "Pasaport fotoğrafı",
+            "ru": "Фото паспорта"
+          },
+          "keywords": [
+            "pasport",
+            "pasaport",
+            "passport",
+            "паспорт"
+          ]
+        }
+      ]
     },
     {
       "id": "deport",
@@ -108,7 +124,23 @@
         "qora",
         "chiqarib"
       ],
-      "ask_quantity": false
+      "ask_quantity": false,
+      "required_docs": [
+        {
+          "id": "pasport",
+          "name": {
+            "uz": "Pasport rasmi",
+            "tr": "Pasaport fotoğrafı",
+            "ru": "Фото паспорта"
+          },
+          "keywords": [
+            "pasport",
+            "pasaport",
+            "passport",
+            "паспорт"
+          ]
+        }
+      ]
     },
     {
       "id": "ish-beruvchi",
@@ -173,6 +205,76 @@
         "viza",
         "vize",
         "виза"
+      ],
+      "required_docs": [
+        {
+          "id": "vergi",
+          "name": {
+            "uz": "Vergi levhası (soliq guvohnomasi)",
+            "tr": "Vergi levhası",
+            "ru": "Vergi levhası (налоговое свидетельство)"
+          },
+          "keywords": [
+            "vergi",
+            "levha",
+            "soliq"
+          ]
+        },
+        {
+          "id": "imza",
+          "name": {
+            "uz": "İmza sirküleri (imzo namunasi)",
+            "tr": "İmza sirküleri",
+            "ru": "İmza sirküleri (образец подписи)"
+          },
+          "keywords": [
+            "imza",
+            "sirkuler",
+            "sirküler",
+            "imzo"
+          ]
+        },
+        {
+          "id": "oda",
+          "name": {
+            "uz": "Oda sicil kaydı",
+            "tr": "Oda sicil kaydı",
+            "ru": "Oda sicil kaydı"
+          },
+          "keywords": [
+            "oda",
+            "sicil",
+            "kayit",
+            "kaydı"
+          ]
+        },
+        {
+          "id": "gelir",
+          "name": {
+            "uz": "Son yılın gelir beyannamesi",
+            "tr": "Son yılın gelir beyannamesi",
+            "ru": "Son yılın gelir beyannamesi"
+          },
+          "keywords": [
+            "gelir",
+            "beyan",
+            "beyanname",
+            "deklaratsiya"
+          ]
+        },
+        {
+          "id": "isletme",
+          "name": {
+            "uz": "İşletme belgesi",
+            "tr": "İşletme belgesi",
+            "ru": "İşletme belgesi"
+          },
+          "keywords": [
+            "isletme",
+            "işletme",
+            "belgesi"
+          ]
+        }
       ]
     }
   ]

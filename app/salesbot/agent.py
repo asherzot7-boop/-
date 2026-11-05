@@ -154,7 +154,7 @@ def extract(text: str, products: list[cat.Product], stage: LeadStage) -> Extract
         name = _NAME_PREFIX.sub("", plain).strip(" .,!")
         if 1 < len(name) <= 60 and not any(ch.isdigit() for ch in name) and len(name.split()) <= 4:
             e.name = _title(name)
-    if stage == LeadStage.ADDRESS and not e.pickup and not e.yes and len(plain) >= 5 and not (e.phone and len(rest.strip()) < 5):
+    if stage == LeadStage.ADDRESS and not e.pickup and not (e.yes and len(plain) < 10) and len(plain) >= 5 and not (e.phone and len(rest.strip()) < 5):
         e.address = plain[:500]
     return e
 
@@ -247,7 +247,8 @@ class SalesAgent:
 
     # ------------------------------------------------------------ public
     async def handle(self, channel: str, external_id: str, text: str, *, display_name: str | None = None,
-                     phone: str | None = None, message_id: str | None = None, extra: dict | None = None) -> AgentReply:
+                     phone: str | None = None, message_id: str | None = None, extra: dict | None = None,
+                     detect_language: bool = True) -> AgentReply:
         text = (text or "").strip()[:4000]
         notices: list[str] = []
         async with self.sf() as s:
@@ -273,7 +274,7 @@ class SalesAgent:
 
             if text:
                 detected, sure = L.detect(text, lead.language)
-                if sure or is_new:
+                if detect_language and (sure or is_new):
                     lead.language = detected
                 try:
                     s.add(LeadMessage(lead_id=lead.id, channel=channel, direction="in", text=text, external_message_id=message_id))
@@ -334,8 +335,13 @@ class SalesAgent:
             text = L.text(lg, "voice_failed")
         else:
             text = L.text(lg, "file_received", n=count)
-            if caption and caption.strip():
-                follow = await self.handle(channel, external_id, caption, message_id=f"{message_id}:caption" if message_id else None)
+            checklist = await self._update_checklist(lead.id, row.id, name, caption or "")
+            if checklist:
+                text += "\n" + checklist
+            if caption and caption.strip() and lead.stage not in (LeadStage.WON, LeadStage.HANDOFF):
+                # a caption is usually a document title: it may carry funnel data, but never switches the language
+                follow = await self.handle(channel, external_id, caption, message_id=f"{message_id}:caption" if message_id else None,
+                                           detect_language=False)
                 if follow.text:
                     text += "\n\n" + follow.text
         await self._log_out(lead.id, channel, text)
@@ -411,6 +417,87 @@ class SalesAgent:
             await self._log_out(lead_id, channel, text)
         await self._sheets(row)
         return True, f"💰 Лид #{lead_id}: тўлов белгиланди." + ("" if delivered else " Мижозга хабар юборилмади, ўзингиз хабар беринг.")
+
+    # ------------------------------------------------------------ status, documents, reviews
+    def _status_names(self, lang: str) -> list[str]:
+        return L.text(lang, "status_names").split("|")
+
+    def _status_text(self, lead: Lead, note: str = "") -> str:
+        step = (lead.extra or {}).get("status", 1)
+        names = self._status_names(lead.language)
+        return L.text(lead.language, "status_msg", id=lead.order_id or lead.id, status=names[min(step, len(names) - 1)],
+                      note=f" {note.strip()}" if note and note.strip() else "")
+
+    async def _update_checklist(self, lead_id: int, file_id: int, name: str, caption: str) -> str | None:
+        """Match a received file to the service's required documents by name/caption keywords; returns the checklist line."""
+        async with self.sf() as s:
+            lead = await s.get(Lead, lead_id)
+            products = await cat.load_catalog(s, self.settings.sales_catalog_path, self.settings.sales_catalog_from_books)
+            product = next((p for p in products if p.id == lead.product_id), None)
+            if product is None or not product.required_docs:
+                return None
+            got = dict((lead.extra or {}).get("docs", {}))
+            missing = [d for d in product.required_docs if d["id"] not in got]
+            hay = _fold(f"{name} {caption}")
+            match = next((d for d in missing if any(_fold(k) in hay for k in d.get("keywords", []))), None)
+            if match is None and len(missing) == 1 and len(product.required_docs) == 1:
+                match = missing[0]                                   # one-document services: any file is that document
+            if match is not None:
+                got[match["id"]] = file_id
+            lead.extra = {**(lead.extra or {}), "docs": got}
+            missing = [d for d in product.required_docs if d["id"] not in got]
+            lg = lead.language
+            if not missing:
+                if lead.stage == LeadStage.WON and (lead.extra or {}).get("status", 0) == 0:
+                    lead.extra = {**lead.extra, "status": 1}
+                await s.commit()
+                return L.text(lg, "docs_done")
+            await s.commit()
+            return L.text(lg, "docs_state", got=", ".join(cat._localized(d["name"], lg) for d in product.required_docs if d["id"] in got) or "—",
+                          left=", ".join(cat._localized(d["name"], lg) for d in missing))
+
+    async def set_doc(self, lead_id: int, doc_id: str, received: bool) -> tuple[bool, str]:
+        async with self.sf() as s:
+            lead = await s.get(Lead, lead_id)
+            if lead is None:
+                return False, "Лид топилмади."
+            got = dict((lead.extra or {}).get("docs", {}))
+            if received:
+                got[doc_id] = got.get(doc_id) or "manual"
+            else:
+                got.pop(doc_id, None)
+            lead.extra = {**(lead.extra or {}), "docs": got}
+            await s.commit()
+        return True, "Белгиланди ✓"
+
+    async def set_status(self, lead_id: int, step: int, note: str = "") -> tuple[bool, str]:
+        """Manager moves the application; the client is told in their language. The last step asks for a rating."""
+        async with self.sf() as s:
+            lead = await s.get(Lead, lead_id)
+            if lead is None:
+                return False, "Лид топилмади."
+            names = self._status_names(lead.language)
+            if not 0 <= step < len(names):
+                return False, f"Ҳолат 1 дан {len(names)} гача: " + " · ".join(f"{i + 1}) {n}" for i, n in enumerate(self._status_names('uzc')))
+            extra = {**(lead.extra or {}), "status": step}
+            history = list(extra.get("status_history", []))
+            history.append({"step": step, "time": utcnow().isoformat(timespec="seconds"), "note": note[:300]})
+            extra["status_history"] = history[-20:]
+            done = step == len(names) - 1
+            if done and "rating" not in extra:
+                extra["review_pending"] = True
+            lead.extra = extra
+            text = self._status_text(lead, note)
+            if done and extra.get("review_pending"):
+                text += "\n\n" + L.text(lead.language, "review_ask")
+            channel, to, xtra = lead.channel, lead.external_id, lead.extra
+            await s.commit()
+        if channel == "phone" or self.outbound is None or not self.outbound.can_send(channel):
+            return True, f"Ҳолат сақланди. Мижозга ўзингиз хабар беринг ({to}): {text}"
+        if not await self.outbound.send(channel, to, text, xtra):
+            return True, "Ҳолат сақланди, лекин мижозга юборилмади (24 соатлик ойна ёпиқ бўлиши мумкин)."
+        await self._log_out(lead_id, channel, text)
+        return True, "Ҳолат сақланди ва мижозга юборилди ✅"
 
     async def manager_answer(self, lead_id: int, text: str) -> tuple[bool, str]:
         """Answer the client's open question and keep the answer in the knowledge base."""
@@ -508,6 +595,26 @@ class SalesAgent:
                 text = L.text(lead.language, "reminder", name=name, question=question)
                 lead.reminder_count = 1
                 lead.last_reminder_at = now
+                if await self.outbound.send(lead.channel, lead.external_id, text, lead.extra):
+                    s.add(LeadMessage(lead_id=lead.id, channel=lead.channel, direction="out", text=text))
+                    sent += 1
+            # missing documents after the application: at most one reminder a day, three in total
+            day_ago = now - timedelta(hours=20)
+            won = list(await s.scalars(select(Lead).where(Lead.stage == LeadStage.WON, Lead.channel != "phone")))
+            for lead in won:
+                ex = lead.extra or {}
+                product = next((p for p in products if p.id == lead.product_id), None)
+                if not product or not product.required_docs or ex.get("docs_reminders", 0) >= 3:
+                    continue
+                missing = [d for d in product.required_docs if d["id"] not in ex.get("docs", {})]
+                last = ex.get("docs_reminded_at")
+                if not missing or (last and last > day_ago.isoformat()) or lead.last_message_at > older:
+                    continue
+                if lead.channel in ("instagram", "whatsapp", "messenger") and lead.last_message_at < newest_allowed:
+                    continue
+                text = L.text(lead.language, "docs_reminder", name=f", {lead.name}" if lead.name else "", id=lead.order_id or lead.id,
+                              left=", ".join(cat._localized(d["name"], lead.language) for d in missing))
+                lead.extra = {**ex, "docs_reminders": ex.get("docs_reminders", 0) + 1, "docs_reminded_at": now.isoformat()}
                 if await self.outbound.send(lead.channel, lead.external_id, text, lead.extra):
                     s.add(LeadMessage(lead_id=lead.id, channel=lead.channel, direction="out", text=text))
                     sent += 1
@@ -636,6 +743,18 @@ class SalesAgent:
             notices.append(f"💬 Лид #{lead.id} ({CHANNEL_NAMES.get(lead.channel, lead.channel)}, {lead.name or lead.display_name or lead.external_id}):\n{text}")
             return AgentReply(None, done=True)
         if lead.stage == LeadStage.WON:
+            ex = lead.extra or {}
+            digits = re.fullmatch(r"\s*([1-5])\s*(?:/\s*5)?\s*[!.]?\s*", text or "")
+            stars = (text or "").count("⭐")
+            if ex.get("review_pending") and (digits or 1 <= stars <= 5):
+                rating = int(digits.group(1)) if digits else stars
+                lead.extra = {**{k: v for k, v in ex.items() if k != "review_pending"}, "rating": rating}
+                if rating >= 4:
+                    return AgentReply(L.text(lg, "review_good", code=f"NT{lead.id}"), done=True)
+                notices.append(self._manager_card(lead, f"⚠️ Паст баҳо: {rating}/5 — мижоз билан боғланинг"))
+                return AgentReply(L.text(lg, "review_bad"), done=True)
+            if text and (L.STATUS_Q.search(text) or L.STATUS_Q.search(L.normalize(text))):
+                return AgentReply(self._status_text(lead), done=True)
             return AgentReply(L.text(lg, "after_won", id=lead.order_id or lead.id), done=True)
 
         if not text:  # call started / /start
@@ -644,6 +763,10 @@ class SalesAgent:
                 return AgentReply(L.text(lg, "greet_voice", shop=shop))
             return AgentReply(self._greeting(lead, products))
 
+        ref = L.REFERRAL.search(text or "")
+        if ref and not (lead.extra or {}).get("referred_by") and int(ref.group(1)) != lead.id:
+            lead.extra = {**(lead.extra or {}), "referred_by": int(ref.group(1))}
+            notices.append(f"🤝 Тавсия коди: лид #{lead.id} мижоз #{ref.group(1)} тавсияси билан келди. Чегирма қарори — менежерда.")
         e = extract(text, products, lead.stage)
         e.extra["first"] = lead.stage == LeadStage.NEW
         if self.model is not None:
@@ -810,6 +933,13 @@ class SalesAgent:
             pay = payments.payment_text(self.settings, lead.language, lead.id, lead.prepayment_due, lead.currency, lead.payment_link)
             if pay:
                 text += "\n\n" + pay
+        if product and product.required_docs:
+            got = (lead.extra or {}).get("docs", {})
+            missing = [d for d in product.required_docs if d["id"] not in got]
+            lead.extra = {**(lead.extra or {}), "status": 0 if missing else 1}
+            if missing:
+                text += "\n\n" + L.text(lead.language, "docs_state", got=", ".join(cat._localized(d["name"], lead.language) for d in product.required_docs if d["id"] in got) or "—",
+                                         left=", ".join(cat._localized(d["name"], lead.language) for d in missing))
         notices.append(self._manager_card(lead, "✅ Янги ариза" if service else "✅ Янги буюртма", product))
         return AgentReply(text, done=True, won=True)
 
@@ -876,6 +1006,14 @@ def _faq_lang_ok(entry, lang: str) -> bool:
         return True
     base = "uz" if lang == "uzc" else lang
     return entry.language == base
+
+
+def _fold(text: str) -> str:
+    """Lower-case and strip Turkish/Uzbek diacritics so 'İşletme' matches 'isletme'."""
+    t = L.normalize(text)
+    for a, b in (("ı", "i"), ("i̇", "i"), ("ş", "s"), ("ç", "c"), ("ğ", "g"), ("ö", "o"), ("ü", "u"), ("'", "")):
+        t = t.replace(a, b)
+    return t
 
 
 def _sheet_row(event: str, lead: Lead) -> dict:

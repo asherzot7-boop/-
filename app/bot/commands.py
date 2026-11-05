@@ -55,7 +55,7 @@ HELP = """Nashriyot AI — буйруқлар
 /pause · /resume — автоматик жараёнлар (раҳбар)
 /leads — сотув агенти лидлари (Instagram, WhatsApp, Telegram, телефон) · /lead <id> — ёзишма · /lead bot <id> — ботга қайтариш
 /reply <id> <матн> — мижозга жавоб (у ёзган каналга) · /paid <id> — олдиндан тўлов келди · /files <id> — мижоз юборган ҳужжатлар
-/answer <id> <жавоб> — савол-жавоб (базага қўшилади) · /faq — ўрганилган жавоблар · /result <id> ban|ok — паспорт текшируви натижаси ва кейинги таклиф
+/status <id> <1-5> [изоҳ] — ариза ҳолати (мижозга хабар боради) · /answer <id> <жавоб> — савол-жавоб (базага қўшилади) · /faq — ўрганилган жавоблар · /result <id> ban|ok — паспорт текшируви натижаси ва кейинги таклиф
 
 Оддий тилда ҳам ёзишингиз мумкин, масалан:
 «Янги дарслик лойиҳасини оч, биринчи бобни муҳаррирга бер, кейин методистга текширтир ва натижани менга юбор»"""
@@ -483,6 +483,20 @@ class CommandService:
         ok, info = await sales.send_result(lead_id, args[1], note)
         if ok:
             await audit.log_action(s, "lead.result", user, "lead", lead_id, {"outcome": args[1]})
+        return Reply(info)
+
+    async def cmd_status(self, s: AsyncSession, user, args, raw, key) -> Reply:
+        sales = getattr(self, "sales", None)
+        if sales is None:
+            return Reply("Сотув агенти ўчирилган.")
+        if len(args) < 2:
+            return Reply("Фойдаланиш: /status <лид_id> <1-5> [изоҳ]\n1) Ҳужжатлар кутилмоқда 2) Ҳужжатлар қабул қилинди 3) Ариза топширилди "
+                         "4) Натижа кутилмоқда 5) Якунланди — мижозга хабар боради, 5 да баҳо сўралади")
+        parts = raw.strip().split(None, 2)
+        lead_id = _int(args[0], "Лид ID")
+        ok, info = await sales.set_status(lead_id, _int(args[1], "Ҳолат") - 1, parts[2] if len(parts) > 2 else "")
+        if ok:
+            await audit.log_action(s, "lead.status", user, "lead", lead_id, {"step": args[1]})
         return Reply(info)
 
     async def cmd_faq(self, s: AsyncSession, user, args, raw, key) -> Reply:

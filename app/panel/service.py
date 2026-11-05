@@ -160,12 +160,15 @@ async def director(session: AsyncSession, settings, days: int = 30, now: datetim
     access = list(await session.scalars(select(AuditLog).where(AuditLog.action.in_(["file.viewed", "file.forwarded", "file.purged"]))
                                         .order_by(AuditLog.id.desc()).limit(20)))
     upsell = [x for x in leads if (x.extra or {}).get("from_lead")]
+    ratings = [x.extra["rating"] for x in leads if (x.extra or {}).get("rating")]
     money = lambda d: [{"currency": c, "amount": v, "text": cat.money(v, c, "uzc")} for c, v in sorted(d.items()) if v]
     return {
         "days": days,
         "totals": {"leads": len(leads), "won": len(won), "conversion": round(100 * len(won) / len(leads)) if leads else 0,
                    "handoff": sum(x.stage == LeadStage.HANDOFF for x in leads), "lost": sum(x.stage == LeadStage.LOST for x in leads),
-                   "upsell_offered": len(upsell), "upsell_won": sum(x.stage == LeadStage.WON for x in upsell)},
+                   "upsell_offered": len(upsell), "upsell_won": sum(x.stage == LeadStage.WON for x in upsell),
+                   "rating": round(sum(ratings) / len(ratings), 1) if ratings else None, "ratings": len(ratings),
+                   "referrals": sum(1 for x in leads if (x.extra or {}).get("referred_by"))},
         "revenue": money(revenue), "prepay_due": money(prepay_due), "prepaid": money(prepaid),
         "by_channel": group(lambda x: CHANNEL_NAMES.get(x.channel, x.channel)),
         "by_service": group(lambda x: (products[x.product_id].title("uzc") if x.product_id in products else x.product_name) if x.product_id else None),
@@ -214,14 +217,22 @@ async def agent_process(session: AsyncSession, settings, now: datetime | None = 
 
 
 # ------------------------------------------------------------------ manager
+STATUS_UZC = ["Ҳужжатлар кутилмоқда", "Ҳужжатлар қабул қилинди", "Ариза топширилди", "Натижа кутилмоқда", "Якунланди ✅"]
+
+
 def _card(x: Lead, products: dict, files: dict) -> dict:
     p = products.get(x.product_id)
-    return {"id": x.id, "channel": CHANNEL_NAMES.get(x.channel, x.channel), "channel_key": x.channel, "who": x.name or x.display_name or x.external_id,
+    ex = x.extra or {}
+    got = ex.get("docs", {})
+    return {"status": ex.get("status"), "status_name": STATUS_UZC[ex["status"]] if isinstance(ex.get("status"), int) else None,
+            "checklist": [{"id": d["id"], "name": cat._localized(d["name"], "uz"), "received": d["id"] in got} for d in (p.required_docs if p else [])],
+            "rating": ex.get("rating"), "referred_by": ex.get("referred_by"), "source": ex.get("source"),
+            **{"id": x.id, "channel": CHANNEL_NAMES.get(x.channel, x.channel), "channel_key": x.channel, "who": x.name or x.display_name or x.external_id,
             "phone": x.phone, "language": LANG_NAMES.get(x.language, x.language), "service": x.product_name, "quantity": x.quantity,
             "total": cat.price_text(p, "uzc", x.total) if p and x.total else None, "details": x.address,
             "prepay": cat.money(x.prepayment_due, x.currency or "so'm", "uzc") if x.prepayment_due else None,
             "paid": bool(x.prepaid_at), "stage": STAGE_NAMES[x.stage], "question": (x.extra or {}).get("open_question"),
-            "files": files.get(x.id, []), "updated": _iso(x.last_message_at), "can_write": x.channel != "phone"}
+            "files": files.get(x.id, []), "updated": _iso(x.last_message_at), "can_write": x.channel != "phone"}}
 
 
 async def manager(session: AsyncSession, settings) -> dict:
@@ -237,7 +248,7 @@ async def manager(session: AsyncSession, settings) -> dict:
                     and products[x.product_id].next_offers and not (x.extra or {}).get("result")],
         "handoff": [card(x) for x in leads if x.stage == LeadStage.HANDOFF],
         "questions": [card(x) for x in leads if (x.extra or {}).get("open_question")],
-        "new": [card(x) for x in leads if x.stage == LeadStage.WON][:8],
+        "inwork": [card(x) for x in leads if x.stage == LeadStage.WON and (x.extra or {}).get("status", 1) < 4][:30],
     }
 
 

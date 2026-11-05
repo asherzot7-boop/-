@@ -223,7 +223,9 @@ async function viewDirector() {
       h("div", { class: "kpi" }, h("b", {}, t.conversion + "%"), h("span", {}, "конверсия")),
       h("div", { class: "kpi" }, h("b", {}, money(d.revenue)), h("span", {}, "аризалар суммаси")),
       h("div", { class: "kpi" }, h("b", {}, money(d.prepaid)), h("span", {}, "олдиндан тўлов келди, кутилган: " + money(d.prepay_due))),
-      h("div", { class: "kpi" }, h("b", {}, `${t.upsell_won}/${t.upsell_offered}`), h("span", {}, "кейинги таклиф: қабул / юборилган"))),
+      h("div", { class: "kpi" }, h("b", {}, `${t.upsell_won}/${t.upsell_offered}`), h("span", {}, "кейинги таклиф: қабул / юборилган")),
+      h("div", { class: "kpi" }, h("b", {}, t.rating ? `${t.rating} ★` : "—"), h("span", {}, `ўртача баҳо (${t.ratings} та)`)),
+      h("div", { class: "kpi" }, h("b", {}, t.referrals), h("span", {}, "тавсия коди билан келди"))),
     h("section", { class: "card" }, h("div", { class: "row spread" }, h("h2", {}, "Кунлар бўйича"),
         h("span", { class: "muted" }, "оч кўк — ёзганлар, яшил — ариза")), barsChart(d.daily)),
     h("div", { class: "grid two" },
@@ -291,6 +293,12 @@ function leadCard(c, kind) {
   const note = h("input", { type: "text", id: `n-${c.id}`, placeholder: "Изоҳ (масалан: 2023-йилдан, 5 йилга)" });
   const actions = [];
   if (kind === "payments") actions.push(h("button", { class: "primary", onclick: e => act(e.target, `/leads/${c.id}/paid`) }, "Тўлов келди ✓"));
+  if (kind === "inwork") {
+    const STEPS = ["Ҳужжатлар кутилмоқда", "Ҳужжатлар қабул қилинди", "Ариза топширилди", "Натижа кутилмоқда", "Якунланди ✅"];
+    const sel = h("select", { id: `st-${c.id}`, "aria-label": "Ариза ҳолати" }, STEPS.map((st, i) => h("option", { value: i, selected: i === (c.status ?? 1) }, `${i + 1}) ${st}`)));
+    const snote = h("input", { type: "text", id: `sn-${c.id}`, placeholder: "Изоҳ мижозга (ихтиёрий)" });
+    actions.push(sel, snote, h("button", { class: "primary", onclick: e => act(e.target, `/leads/${c.id}/status`, { step: +sel.value, note: snote.value }) }, "Ҳолатни юбориш"));
+  }
   if (kind === "results") actions.push(note,
     h("button", { class: "warn", onclick: e => act(e.target, `/leads/${c.id}/result`, { outcome: "ban", note: note.value }) }, "Тақиқ бор → депорт таклифи"),
     h("button", { class: "primary", onclick: e => act(e.target, `/leads/${c.id}/result`, { outcome: "ok", note: note.value }) }, "Тақиқ йўқ ✓"));
@@ -309,10 +317,14 @@ function leadCard(c, kind) {
       c.details ? [h("dt", {}, "Тафсилот"), h("dd", {}, c.details)] : null,
       c.question ? [h("dt", {}, "Савол"), h("dd", {}, h("strong", {}, "«" + c.question + "»"))] : null,
       h("dt", {}, "Тил"), h("dd", {}, c.language)),
+    c.checklist && c.checklist.length ? h("div", { class: "files" }, c.checklist.map(d => h("button", {
+      "aria-pressed": String(d.received), title: d.received ? "Олинди — бекор қилиш учун босинг" : "Олинмади — қўлда белгилаш",
+      onclick: e => act(e.target, `/leads/${c.id}/docs`, { doc_id: d.id, received: !d.received }) }, (d.received ? "✅ " : "⬜ ") + d.name))) : null,
+    c.rating || c.referred_by ? h("p", { class: "muted", style: "margin:0" }, [c.rating ? `Баҳо: ${c.rating}/5` : "", c.referred_by ? ` Тавсия: #${c.referred_by}` : ""].join(" ")) : null,
     c.files.length ? h("div", { class: "files" }, c.files.map(f => f.has_file
       ? h("button", { onclick: () => openFile(f.id, f.name) }, (f.kind === "audio" ? "🎤 " : f.kind === "photo" ? "🖼 " : "📎 ") + f.name)
       : h("span", { class: "muted" }, f.name + " (юкланмаган)"))) : null,
-    !c.can_write && kind !== "results" && kind !== "new" ? h("p", { class: "muted" }, "Телефон мижози: қўнғироқ қилинг " + (c.phone || "")) : null,
+    !c.can_write && kind !== "results" && kind !== "inwork" ? h("p", { class: "muted" }, "Телефон мижози: қўнғироқ қилинг " + (c.phone || "")) : null,
     actions.length ? h("div", { class: "row" }, actions) : null,
     h("div", { class: "row spread" }, h("span", { class: "muted" }, "охирги хабар: " + ago(c.updated)),
       h("button", { onclick: () => openLead(c.id) }, "Ёзишмани очиш")));
@@ -324,13 +336,13 @@ async function viewManager() {
     ["results", "Паспорт натижасини юбориш", "Тақиқ бор бўлса, мижозга депорт хизмати таклиф қилинади."],
     ["payments", "Олдиндан тўлов кутилмоқда", "Тўлов картага ёки Payme/Click'га тушгач, «Тўлов келди» ни босинг."],
     ["handoff", "Менежер сўраган мижозлар", "Агент жим турибди: мижозга шу ердан ёзинг."],
-    ["new", "Охирги аризалар", ""],
+    ["inwork", "Ишдаги аризалар", "Ҳолатни ўзгартирсангиз, мижоз ўз тилида хабар олади. «Якунланди» да ундан баҳо сўралади. Ҳужжатлар рўйхатини қўлда ҳам белгилаш мумкин."],
   ];
   const urgent = m.questions.length + m.results.length + m.payments.length + m.handoff.length;
   const badge = document.getElementById("mgr-badge"); badge.hidden = !urgent; badge.textContent = urgent;
   return [h("div", {}, h("h1", {}, "Менежер"), h("p", { class: "sub" }, urgent ? `${urgent} та иш кутмоқда` : "Ҳамма иш бажарилган ✓")),
     ...sections.map(([k, title, hint]) => h("section", { class: "card", style: "background:transparent;border:0;padding:0" },
-      h("div", { class: "row" }, h("h2", {}, title), m[k].length ? h("span", { class: "badge", style: k === "new" ? "background:var(--turq)" : "" }, m[k].length) : null),
+      h("div", { class: "row" }, h("h2", {}, title), m[k].length ? h("span", { class: "badge", style: k === "inwork" ? "background:var(--turq)" : "" }, m[k].length) : null),
       hint ? h("p", { class: "muted", style: "margin:0" }, hint) : null,
       m[k].length ? h("div", { class: "grid two" }, m[k].map(c => leadCard(c, k))) : h("p", { class: "empty" }, "Йўқ")))];
 }

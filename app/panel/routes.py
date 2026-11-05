@@ -135,6 +135,32 @@ async def paid(request: Request, lead_id: int) -> dict:
     return _result(ok, info)
 
 
+class StatusIn(BaseModel):
+    step: int = Field(ge=0, le=4)
+    note: str = Field(default="", max_length=300)
+
+
+class DocIn(BaseModel):
+    doc_id: str = Field(min_length=1, max_length=40)
+    received: bool
+
+
+@panel.post("/leads/{lead_id}/status")
+async def status(request: Request, lead_id: int, body: StatusIn) -> dict:
+    ok, info = await _sales(request).set_status(lead_id, body.step, body.note)
+    if ok:
+        await _audit(request, "lead.status", lead_id, {"step": body.step + 1})
+    return _result(ok, info)
+
+
+@panel.post("/leads/{lead_id}/docs")
+async def docs(request: Request, lead_id: int, body: DocIn) -> dict:
+    ok, info = await _sales(request).set_doc(lead_id, body.doc_id, body.received)
+    if ok:
+        await _audit(request, "lead.doc", lead_id, {"doc": body.doc_id, "received": body.received})
+    return _result(ok, info)
+
+
 @panel.post("/leads/{lead_id}/result")
 async def result(request: Request, lead_id: int, body: ResultIn) -> dict:
     ok, info = await _sales(request).send_result(lead_id, body.outcome, body.note)
