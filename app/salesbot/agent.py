@@ -244,6 +244,7 @@ class SalesAgent:
         self.outbound = outbound  # Outbound: messages the business starts (manager replies, reminders)
         self.transcriber = transcriber
         self.http = None  # httpx.AsyncClient for the Sheets webhook, created on first use
+        self._free_slots_cache: list = []
 
     # ------------------------------------------------------------ public
     async def handle(self, channel: str, external_id: str, text: str, *, display_name: str | None = None,
@@ -293,9 +294,16 @@ class SalesAgent:
             reply.lead_id = lead.id
             reply.language = lead.language
             sheet_row = _sheet_row("won", lead) if reply.won else None
+            route = self._route(lead)
+            if lead.stage == LeadStage.HANDOFF or (lead.extra or {}).get("open_question"):
+                if not (lead.extra or {}).get("waiting_since"):
+                    lead.extra = {**(lead.extra or {}), "waiting_since": utcnow().isoformat(timespec="seconds")}
+            booked = lead if reply.won and (lead.extra or {}).get("booking_at") else None
             await s.commit()
         for note in notices:
-            await self._notify(note)
+            await self._notify(note, route)
+        if booked is not None:
+            await self._calendar(booked)
         if sheet_row:
             await self._sheets(sheet_row)
         return reply
@@ -400,6 +408,10 @@ class SalesAgent:
         if not await self.outbound.send(channel, to, body, extra):
             return False, "Юборилмади. Instagram ва WhatsApp'да мижоз охирги марта 24 соатдан олдин ёзган бўлса, эркин хабар юбориб бўлмайди."
         await self._log_out(lead_id, channel, body)
+        async with self.sf() as s:
+            lead = await s.get(Lead, lead_id)
+            lead.extra = {k: v for k, v in (lead.extra or {}).items() if k not in ("waiting_since", "escalated")}
+            await s.commit()
         return True, "Юборилди ✅"
 
     async def mark_paid(self, lead_id: int) -> tuple[bool, str]:
@@ -733,6 +745,136 @@ class SalesAgent:
             await self._audit("file.purged", None, {"count": removed, "older_than_days": self.settings.sales_file_retention_days})
         return removed
 
+    # ------------------------------------------------------------ booking
+    def _slot_label(self, at_utc, lang: str) -> str:
+        from zoneinfo import ZoneInfo
+
+        loc = at_utc.replace(tzinfo=ZoneInfo("UTC")).astimezone(self.settings.tz)
+        days, months = L.text(lang, "weekdays").split("|"), L.text(lang, "months").split("|")
+        return f"{days[loc.weekday()]}, {loc.day} {months[loc.month - 1]} {loc:%H:%M}"
+
+    async def _free_slots(self, s, now=None, count: int = 3) -> list:
+        """Next free slots inside working days/hours (local time), skipping booked ones. Returns naive UTC datetimes."""
+        from datetime import datetime as _dt
+        from zoneinfo import ZoneInfo
+
+        st, tz = self.settings, self.settings.tz
+        now = now or utcnow()
+        lo, hi = (int(x) for x in st.sales_booking_days.split("-"))
+        h0, h1 = st.sales_booking_hours.split("-")
+        start_m = int(h0.split(":")[0]) * 60 + int(h0.split(":")[1])
+        end_m = int(h1.split(":")[0]) * 60 + int(h1.split(":")[1])
+        taken = set()
+        for lead in await s.scalars(select(Lead).where(Lead.stage != LeadStage.LOST)):
+            b = (lead.extra or {}).get("booking_at")
+            if b:
+                taken.add(b)
+        earliest = now + timedelta(hours=st.sales_booking_lead_hours)
+        local = now.replace(tzinfo=ZoneInfo("UTC")).astimezone(tz)
+        out = []
+        for day in range(0, 14):
+            d = (local + timedelta(days=day)).date()
+            if not lo <= d.isoweekday() <= hi:
+                continue
+            m = start_m
+            while m + st.sales_booking_slot_minutes <= end_m:
+                at = _dt(d.year, d.month, d.day, m // 60, m % 60, tzinfo=tz).astimezone(ZoneInfo("UTC")).replace(tzinfo=None)
+                if at >= earliest and at.isoformat() not in taken:
+                    out.append(at)
+                    if len(out) >= count:
+                        return out
+                m += st.sales_booking_slot_minutes
+        return out
+
+    async def booking_reminders(self, now=None) -> int:
+        if self.outbound is None:
+            return 0
+        now = now or utcnow()
+        sent = 0
+        async with self.sf() as s:
+            for lead in await s.scalars(select(Lead).where(Lead.stage == LeadStage.WON)):
+                ex = lead.extra or {}
+                b = ex.get("booking_at")
+                if not b or ex.get("booking_reminded"):
+                    continue
+                from datetime import datetime as _dt
+                from zoneinfo import ZoneInfo
+
+                at = _dt.fromisoformat(b)
+                if not now <= at <= now + timedelta(minutes=65):
+                    continue
+                lead.extra = {**ex, "booking_reminded": True}
+                hhmm = at.replace(tzinfo=ZoneInfo("UTC")).astimezone(self.settings.tz).strftime("%H:%M")
+                text = L.text(lead.language, "booking_reminder", time=hhmm)
+                if await self.outbound.send(lead.channel, lead.external_id, text, lead.extra):
+                    s.add(LeadMessage(lead_id=lead.id, channel=lead.channel, direction="out", text=text))
+                    sent += 1
+            await s.commit()
+        return sent
+
+    async def _calendar(self, lead: Lead) -> None:
+        url = self.settings.sales_calendar_webhook_url
+        b = (lead.extra or {}).get("booking_at")
+        if not b or url is None or not url.get_secret_value():
+            return
+        from datetime import datetime as _dt
+
+        start = _dt.fromisoformat(b)
+        event = {"title": f"Konsultatsiya: {lead.name or lead.external_id}", "start": start.isoformat() + "Z",
+                 "end": (start + timedelta(minutes=self.settings.sales_booking_slot_minutes)).isoformat() + "Z",
+                 "description": f"{lead.product_name or ''} · {lead.phone or ''} · lid #{lead.id}"}
+        try:
+            if self.http is None:
+                import httpx
+
+                self.http = httpx.AsyncClient(timeout=15, follow_redirects=True)
+            await self.http.post(url.get_secret_value(), json=event)
+        except Exception as exc:
+            log.warning("Google Calendar'га ёзилмади: %s", type(exc).__name__)
+
+    # ------------------------------------------------------------ routing and response time
+    def _route(self, lead: Lead | None) -> list[int] | None:
+        """Managers for this lead: service id, then language, then "default". None -> everyone (old behaviour)."""
+        r = self.settings.sales_routing or {}
+        if not r or lead is None:
+            return None
+        lang = "uz" if lead.language == "uzc" else lead.language
+        group = r.get(lead.product_id or "") or r.get(lang) or r.get("default")
+        if not group:
+            return None
+        ids = [int(x) for x in group]
+        assigned = (lead.extra or {}).get("manager")
+        if assigned in ids:
+            return [assigned]
+        pick = ids[lead.id % len(ids)]                      # stable round-robin
+        lead.extra = {**(lead.extra or {}), "manager": pick}
+        return [pick]
+
+    async def sla_check(self, now=None) -> int:
+        """Hand-offs and open questions nobody answered within SALES_SLA_MINUTES go to the directors, once."""
+        from app.notify import director_ids
+
+        now = now or utcnow()
+        limit = (now - timedelta(minutes=self.settings.sales_sla_minutes)).isoformat()
+        alerts = []
+        async with self.sf() as s:
+            for lead in await s.scalars(select(Lead).where(Lead.last_message_at >= now - timedelta(days=3))):
+                ex = lead.extra or {}
+                since = ex.get("waiting_since")
+                if since and since <= limit and not ex.get("escalated"):
+                    lead.extra = {**ex, "escalated": now.isoformat(timespec="seconds")}
+                    alerts.append(f"⏰ {self.settings.sales_sla_minutes} дақиқадан бери жавоб йўқ: лид #{lead.id} "
+                                  f"({CHANNEL_NAMES.get(lead.channel, lead.channel)}, {lead.name or lead.display_name or lead.external_id})"
+                                  + (f"\nСавол: «{ex['open_question']}»" if ex.get("open_question") else "\nМижоз менежер сўраган")
+                                  + (f"\nМасъул: {ex['manager']}" if ex.get("manager") else ""))
+            directors = await director_ids(s)
+            await s.commit()
+        if self.notifier is not None:
+            for text in alerts:
+                for tid in directors:
+                    await self.notifier.send(tid, text)
+        return len(alerts)
+
     async def _manager_ids(self) -> list[int]:
         ids = list(self.settings.sales_manager_ids)
         if not ids:
@@ -809,6 +951,7 @@ class SalesAgent:
         if ref and not (lead.extra or {}).get("referred_by") and int(ref.group(1)) != lead.id:
             lead.extra = {**(lead.extra or {}), "referred_by": int(ref.group(1))}
             notices.append(f"🤝 Тавсия коди: лид #{lead.id} мижоз #{ref.group(1)} тавсияси билан келди. Чегирма қарори — менежерда.")
+        self._free_slots_cache = await self._free_slots(s) if any(p.booking for p in products) else []
         e = extract(text, products, lead.stage)
         e.extra["first"] = lead.stage == LeadStage.NEW
         if self.model is not None:
@@ -865,6 +1008,15 @@ class SalesAgent:
             lead.name = e.name
         product = next((p for p in products if p.id == lead.product_id), None)
         service = bool(product and product.is_service)
+        offered = (lead.extra or {}).get("slots")
+        pick = re.fullmatch(r"\s*([1-3])\s*[.)]?\s*", text or "")
+        if offered and lead.stage == LeadStage.ADDRESS and pick and int(pick.group(1)) <= len(offered):
+            from datetime import datetime as _dt
+
+            at = _dt.fromisoformat(offered[int(pick.group(1)) - 1])
+            lead.extra = {**{k: v for k, v in lead.extra.items() if k != "slots"}, "booking_at": at.isoformat()}
+            e.address = self._slot_label(at, lg)
+            e.quantity = None
         if e.pickup and not service:
             lead.address = L.text(lg, "pickup")
         elif e.address:
@@ -942,6 +1094,11 @@ class SalesAgent:
             return AgentReply(L.text(lg, "ask_phone", name=lead.name), ask_phone=True)
         if not lead.address:
             lead.stage = LeadStage.ADDRESS
+            if product and product.booking:
+                slots = self._free_slots_cache or []
+                if slots:
+                    lead.extra = {**(lead.extra or {}), "slots": [x.isoformat() for x in slots]}
+                    return AgentReply(L.text(lg, "slots", slots="\n".join(f"{i + 1}) {self._slot_label(x, lg)}" for i, x in enumerate(slots))))
             if service:
                 return AgentReply(product.ask_details(lg) or L.text(lg, "ask_details"))
             return AgentReply(L.text(lg, "ask_address"))
@@ -1012,11 +1169,11 @@ class SalesAgent:
         lines.append(f"Ёзишма: /lead {lead.id} · Жавоб: /reply {lead.id} матн" + (f" · Тўланди: /paid {lead.id}" if lead.prepayment_due else ""))
         return "\n".join(lines)
 
-    async def _notify(self, text: str) -> None:
+    async def _notify(self, text: str, ids: list[int] | None = None) -> None:
         if self.notifier is None:
             log.info("[сотув хабари]\n%s", text)
             return
-        for tid in await self._manager_ids():
+        for tid in ids or await self._manager_ids():
             await self.notifier.send(tid, text)
 
 

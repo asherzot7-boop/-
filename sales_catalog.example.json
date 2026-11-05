@@ -1,5 +1,5 @@
 {
-  "_comment": "NAMUNA. Narxlar, hujjatlar va tavsiflarni o'zingiznikiga almashtiring. kind=service: 'necha kishi' va 'sana/shahar' so'raladi. price=0 -> 'narxi kelishiladi'. price_from=true -> '150 $ dan'. ask_quantity=false -> 'necha kishi' so'ralmaydi (konsultatsiya).",
+  "_comment": "NAMUNA. Narxlar, hujjatlar va tavsiflarni o'zingiznikiga almashtiring. kind=service: 'necha kishi' va 'sana/shahar' so'raladi. price=0 -> 'narxi kelishiladi'. price_from=true -> '150 $ dan'. ask_quantity=false -> 'necha kishi' so'ralmaydi (konsultatsiya). booking=true -> mijozga konsultatsiya uchun bo'sh vaqtlar taklif qilinadi.",
   "products": [
     {
       "id": "tr-ikamet",
@@ -305,7 +305,8 @@
         "visa",
         "виза"
       ],
-      "ask_quantity": false
+      "ask_quantity": false,
+      "booking": true
     }
   ]
 }

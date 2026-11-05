@@ -108,6 +108,11 @@ async def sales_reminder_loop(c: Container) -> None:
                 n = await c.sales.reengage()
                 if n:
                     log.info("Эски мижозларга хабар: %s", n)
+            if enabled:
+                await c.sales.booking_reminders()
+                n = await c.sales.sla_check()
+                if n:
+                    log.info("Жавобсиз қолган мурожаатлар раҳбарга юборилди: %s", n)
             # privacy: delete expired client files even while automation is paused
             n = await c.sales.purge_files()
             if n:

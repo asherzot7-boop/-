@@ -88,7 +88,7 @@ class Settings(BaseSettings):
     sales_stt_model: str = "whisper-1"  # voice messages -> text (needs OPENAI_API_KEY)
     # Reminder to clients who stopped halfway. Meta lets a business reply freely only within 24 h.
     sales_reminder_hours: float = 20
-    sales_reminder_check_seconds: int = 600
+    sales_reminder_check_seconds: int = 60
     # Advance payment after the confirmation. payment_provider: none | card | payme | click | link
     sales_payment_provider: str = "card"
     sales_payment_card: str | None = None  # "8600 1234 5678 9012 (Jasur N.)" for a manual transfer
@@ -107,6 +107,16 @@ class Settings(BaseSettings):
     sales_source_names: dict = Field(default_factory=dict)
     # Site chat widget: origins allowed to call /webhooks/web (comma separated, * = any)
     sales_web_origins: str = "*"
+    # Consultation booking for services with "booking": true in the catalog
+    sales_booking_days: str = "1-5"            # ISO weekdays: 1 = Monday ... 7 = Sunday
+    sales_booking_hours: str = "10:00-18:00"
+    sales_booking_slot_minutes: int = 30
+    sales_booking_lead_hours: int = 2          # earliest slot offered is this far ahead
+    sales_calendar_webhook_url: SecretStr | None = None   # Apps Script that adds the event to Google Calendar
+    # Routing: {"tr": [111], "deport": [222], "default": [333]} by service id, then language, then default
+    sales_routing: dict = Field(default_factory=dict)
+    # No manager answer to a hand-off / open question in this many minutes -> directors are alerted
+    sales_sla_minutes: int = 15
     # Knowledge base: curated answers (JSON) + answers managers gave with /answer
     sales_faq_path: str | None = "sales_faq.json"
     # Instagram comments: intent (reply to questions/prices only) | all | off
@@ -133,7 +143,7 @@ class Settings(BaseSettings):
         out = []
         for s in (self.bot_token, self.openai_api_key, self.api_token, self.sales_bot_token, self.meta_verify_token, self.meta_app_secret,
                   self.instagram_access_token, self.messenger_page_token, self.whatsapp_access_token, self.twilio_auth_token,
-                  self.sales_sheets_webhook_url, self.sales_files_key):
+                  self.sales_sheets_webhook_url, self.sales_files_key, self.sales_calendar_webhook_url):
             if s is not None and s.get_secret_value():
                 out.append(s.get_secret_value())
         return out
