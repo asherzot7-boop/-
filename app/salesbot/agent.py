@@ -122,7 +122,7 @@ def extract(text: str, products: list[cat.Product], stage: LeadStage) -> Extract
         n = int(q.group(1))
         has_unit = bool(q.group(0)[len(q.group(1)):].strip())
         tail = rest[q.end():q.end() + 8].lower()
-        if re.match(r"\s*-?\s*(sinf|синф|класс|sınıf|kvartal|квартал|uy|уй|dom|дом|ko'cha|кўча|mavze|мавзе|-)", tail):
+        if re.match(r"\s*-?\s*(sinf|синф|класс|sınıf|kvartal|квартал|uy|уй|dom|дом|ko'cha|кўча|mavze|мавзе|yil|йил|yıl|god|год|let|лет|oy|ой|ay|mes|мес|kun|кун|gün|den|ден|дн|soat|соат|saat|chas|час|\$|dollar|доллар|so'm|сўм|сум|-)", tail):
             continue
         bare = rest.strip() == q.group(0).strip()
         if 0 < n <= _MAX_QTY and (has_unit or bare or (not contact_stage and stage != LeadStage.CONFIRM)):
@@ -335,12 +335,15 @@ class SalesAgent:
             return AgentReply(L.text(lg, "handoff"), done=True)
 
         # fill everything this message gives
+        new_product = bool(e.product and lead.product_id != e.product.id)
         if e.product and (lead.product_id != e.product.id):
             lead.product_id, lead.product_name, lead.unit_price = e.product.id, e.product.title(lg), e.product.price
             if lead.stage == LeadStage.CONFIRM and e.quantity is None:
                 lead.quantity = None
         if e.quantity:
             lead.quantity = e.quantity
+        if new_product and e.quantity:
+            e.extra["offer"] = True  # the client named the product and the count at once: still tell the price
         chosen = next((p for p in products if p.id == lead.product_id), None)
         if chosen and not chosen.ask_quantity and not lead.quantity:
             lead.quantity = 1
@@ -402,6 +405,8 @@ class SalesAgent:
                 return AgentReply(e.ai_reply)
             if first_offer:
                 desc = f" {product.desc(lg)}" if product and product.desc(lg) else ""
+                if product:
+                    desc += _offer_extras(product, lg)
                 if product and (product.price_from or product.price <= 0):
                     desc += " " + L.text(lg, "price_note")
                 price = cat.price_text(product, lg) if product else cat.fmt_money(lead.unit_price or 0)
@@ -411,6 +416,7 @@ class SalesAgent:
             desc = f" {product.desc(lg)}" if product.desc(lg) else ""
             if product.price_from or product.price <= 0:
                 desc += " " + L.text(lg, "price_note")
+            desc += _offer_extras(product, lg)
             e.extra["offer"] = False
             nxt = self._next_question(lead, products, e, voice)
             nxt.text = f"{lead.product_name} — {cat.price_text(product, lg)}.{desc}\n\n{nxt.text}"
@@ -428,6 +434,8 @@ class SalesAgent:
             return AgentReply(L.text(lg, "ask_address"))
         lead.stage = LeadStage.CONFIRM
         total = cat.price_text(product, lg, lead.total) if product else cat.fmt_money(lead.total or 0)
+        if product and product.prepayment:
+            total += f" ({L.text(lg, 'prepay_short', amount=cat.money(product.prepayment * lead.quantity, product.currency, lg))})"
         return AgentReply(L.text(lg, "confirm_service" if service else "confirm", product=lead.product_name, qty=lead.quantity, total=total,
                                  name=lead.name, phone=lead.phone, address=lead.address))
 
@@ -465,7 +473,9 @@ class SalesAgent:
                 qty = f" × {lead.quantity}" if lead.quantity else ""
             lines.append(f"{'Хизмат' if product and product.is_service else 'Маҳсулот'}: {lead.product_name}{qty}")
         if lead.address:
-            lines.append(f"{'Сана / шаҳар' if product and product.is_service else 'Манзил'}: {lead.address}")
+            lines.append(f"{'Тафсилот' if product and product.is_service else 'Манзил'}: {lead.address}")
+        if product and product.prepayment and lead.quantity:
+            lines.append(f"Олдиндан тўлов: {cat.money(product.prepayment * lead.quantity, product.currency, 'uzc')}")
         if lead.order_id:
             lines.append(f"Буюртма: #{lead.order_id} (/orders)")
         lines.append(f"Ёзишма: /lead {lead.id}")
@@ -483,6 +493,16 @@ class SalesAgent:
                 ids = await director_ids(s)
         for tid in ids:
             await self.notifier.send(tid, text)
+
+
+def _offer_extras(product: cat.Product, lg: str) -> str:
+    """Result time and advance payment, shown with the first offer."""
+    out = ""
+    if product.result_time:
+        out += " " + L.text(lg, "result_time", time=cat._localized(product.result_time, lg))
+    if product.prepayment:
+        out += " " + L.text(lg, "prepay", amount=cat.money(product.prepayment, product.currency, lg))
+    return out
 
 
 def _first_name(display_name: str | None) -> str | None:

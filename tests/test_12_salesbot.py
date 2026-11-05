@@ -84,7 +84,7 @@ async def test_turkish_pickup_and_cyrillic_uzbek(sales):
 
 async def test_everything_in_one_message(sales):
     r = await talk(sales.agent, ["Namangan ertaklari 5 ta, ismim Ali, +998 93 555 44 33"])
-    assert r[0].text.startswith("Yetkazib")
+    assert "60 000 so'm" in r[0].text and "Yetkazib" in r[0].text  # price is still told once
     async with sales.sf() as s:
         lead = await s.scalar(select(Lead))
         assert (lead.quantity, lead.name, lead.phone) == (5, "Ali", "+998935554433")
@@ -181,7 +181,7 @@ async def test_meta_webhook(sales):
     channel, to, text = sender.sent[-1]
     assert (channel, to) == ("whatsapp", "998901234567")
     # WhatsApp gives the name and number: the agent goes straight to the address
-    assert text.startswith("Yetkazib")
+    assert "Yetkazib" in text and "60 000" in text
 
 
 def test_meta_parse_ignores_non_text():
@@ -237,7 +237,7 @@ async def test_visa_service_with_documents(services):
     assert "2 kishi — 300 $ dan" in r[5].text
     assert r[6].done and "Arizangiz" in r[6].text
     card = services.notifier.sent[-1][1]
-    assert "Янги ариза" in card and "Сана / шаҳар: Istanbul, yanvardan" in card
+    assert "Янги ариза" in card and "Тафсилот: Istanbul, yanvardan" in card
 
 
 async def test_turkish_tour_names_are_in_turkish(services):
@@ -251,3 +251,35 @@ async def test_consultation_skips_quantity(services):
     r = await talk(services.agent, ["Здравствуйте, нужна консультация по визе", "Анна"], who="ru")
     assert "200 000 сум" in r[0].text and "как вас зовут" in r[0].text
     assert "телефон" in r[1].text
+
+
+# ------------------------------------------------------------------ the company's real catalog (sales_catalog.json)
+@pytest.fixture
+async def company(tmp_path):
+    from pathlib import Path
+
+    catalog = Path(__file__).resolve().parents[1] / "sales_catalog.json"
+    settings = make_settings(tmp_path, sales_catalog_path=str(catalog), sales_catalog_from_books=False, sales_manager_ids=[MANAGER],
+                             sales_shop_name="Jihan Jan Jasur Nam Tour")
+    e = await build_env(settings)
+    e.notifier = ConsoleNotifier()
+    e.agent = SalesAgent(e.sf, settings, notifier=e.notifier)
+    yield e
+    await e.engine.dispose()
+
+
+async def test_deport_offer_with_prepayment(company):
+    r = await talk(company.agent, ["Assalomu alaykum", "Deportim bor 3 yillik, narxi qancha?", "Ismim Bekzod", "+998 91 222 33 44",
+                                   "2025-yil mart, 3 yilga", "ha"])
+    assert "Jihan Jan Jasur Nam Tour" in r[0].text
+    assert "2 600 $" in r[1].text and "Oldindan to'lov: 600 $" in r[1].text  # "3 yillik" is a duration, not 3 people
+    assert "1 kishi — 2 600 $ (oldindan to'lov 600 $)" in r[4].text
+    assert r[5].done
+    assert "Олдиндан тўлов: 600 $" in company.notifier.sent[-1][1]
+
+
+async def test_passport_check_and_employer_documents(company):
+    r = await talk(company.agent, ["Merhaba, pasaport sorgulama ne kadar?"], who="tr")
+    assert "80 $" in r[0].text and "12 saat içinde" in r[0].text
+    r = await talk(company.agent, ["Turkiyada ish beruvchim bor, qanday hujjatlar kerak?"], who="ish")
+    assert "Vergi levhası" in r[0].text and "İşletme belgesi" in r[0].text and "WhatsApp" in r[0].text and "800 $" in r[0].text

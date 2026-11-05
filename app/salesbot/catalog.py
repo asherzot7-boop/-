@@ -55,6 +55,8 @@ class Product:
     documents: str | list | dict | None = None
     details_question: str | dict | None = None  # service: what to ask instead of the address
     ask_quantity: bool = True  # False (e.g. a consultation): quantity is 1, never asked
+    prepayment: int = 0  # advance payment per person/unit, same currency; 0 -> none
+    result_time: str | dict | None = None  # e.g. {"uz": "12 soatda", "tr": "12 saatte"}
 
     @property
     def is_service(self) -> bool:
@@ -109,7 +111,8 @@ def _product(item: dict) -> Product:
         book_id=item.get("book_id"), in_stock=bool(item.get("in_stock", True)),
         kind="service" if item.get("kind") == "service" else "goods", currency=str(item.get("currency", "so'm")),
         price_from=bool(item.get("price_from", False)), documents=item.get("documents"), details_question=item.get("details_question"),
-        ask_quantity=bool(item.get("ask_quantity", True)),
+        ask_quantity=bool(item.get("ask_quantity", True)), prepayment=int(item.get("prepayment", 0)),
+        result_time=item.get("result_time"),
     )
 
 

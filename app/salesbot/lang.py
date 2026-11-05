@@ -154,6 +154,9 @@ TEXTS: dict[str, dict[str, str]] = {
         "docs": "{product} uchun odatda kerak bo'ladigan hujjatlar:\n{docs}\nAniq ro'yxatni konsultantimiz holatingizga qarab tasdiqlaydi.",
         "docs_none": "Hujjatlar ro'yxati holatingizga bog'liq — konsultantimiz aniq aytib beradi.",
         "price_note": "Yakuniy narxni konsultant holatingizga qarab aytadi.",
+        "prepay": "Oldindan to'lov: {amount}.",
+        "prepay_short": "oldindan to'lov {amount}",
+        "result_time": "Natija: {time}.",
     },
     "tr": {
         "greet": "Merhaba{name}! 😊 Ben {shop} asistanıyım. Size nasıl yardımcı olabilirim? Hizmetlerimiz:\n{catalog}",
@@ -185,6 +188,9 @@ TEXTS: dict[str, dict[str, str]] = {
         "docs": "{product} için genellikle gereken belgeler:\n{docs}\nKesin listeyi danışmanımız durumunuza göre onaylar.",
         "docs_none": "Belge listesi durumunuza göre değişir — danışmanımız size net bilgi verecek.",
         "price_note": "Kesin fiyatı danışmanımız durumunuza göre belirler.",
+        "prepay": "Ön ödeme: {amount}.",
+        "prepay_short": "ön ödeme {amount}",
+        "result_time": "Sonuç: {time}.",
     },
     "ru": {
         "greet": "Здравствуйте{name}! 😊 Я помощник {shop}. Что вас интересует? Мы предлагаем:\n{catalog}",
@@ -216,6 +222,9 @@ TEXTS: dict[str, dict[str, str]] = {
         "docs": "Для услуги «{product}» обычно нужны документы:\n{docs}\nТочный список консультант подтвердит под вашу ситуацию.",
         "docs_none": "Список документов зависит от ситуации — консультант скажет точно.",
         "price_note": "Окончательную цену консультант назовёт после оценки вашей ситуации.",
+        "prepay": "Предоплата: {amount}.",
+        "prepay_short": "предоплата {amount}",
+        "result_time": "Результат: {time}.",
     },
 }
 

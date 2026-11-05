@@ -1,0 +1,175 @@
+{
+  "_comment": "JIHAN JAN JASUR NAM TOUR MCHJ — haqiqiy xizmatlar (02.11.2026). Narxlar USD. prepayment — bir kishi uchun oldindan to'lov.",
+  "products": [
+    {
+      "id": "pasport-sorgulama",
+      "kind": "service",
+      "name": {
+        "uz": "Pasportni tekshirish (sorgulama)",
+        "tr": "Pasaport sorgulama",
+        "ru": "Проверка паспорта (sorgulama)"
+      },
+      "price": 80,
+      "currency": "USD",
+      "description": {
+        "uz": "Pasportingiz bo'yicha Turkiyaga kirishda taqiq yoki cheklov bor-yo'qligini tekshiramiz.",
+        "tr": "Pasaportunuz üzerinde Türkiye'ye giriş yasağı veya kısıtlama olup olmadığını sorguluyoruz.",
+        "ru": "Проверим, есть ли по вашему паспорту запрет или ограничение на въезд в Турцию."
+      },
+      "result_time": {
+        "uz": "12 soat ichida",
+        "tr": "12 saat içinde",
+        "ru": "в течение 12 часов"
+      },
+      "documents": {
+        "uz": [
+          "Pasport rasmi (PDF yoki skaner) — WhatsApp orqali yuboriladi"
+        ],
+        "tr": [
+          "Pasaport fotoğrafı (PDF veya tarama) — WhatsApp üzerinden gönderilir"
+        ],
+        "ru": [
+          "Фото паспорта (PDF или скан) — отправляется через WhatsApp"
+        ]
+      },
+      "details_question": {
+        "uz": "Natija qachon kerak va qaysi davlat pasporti?",
+        "tr": "Sonuç ne zaman lazım ve hangi ülkenin pasaportu?",
+        "ru": "Когда нужен результат и паспорт какой страны?"
+      },
+      "keywords": [
+        "pasport",
+        "pasaport",
+        "passport",
+        "паспорт",
+        "sorgulama",
+        "sorgu",
+        "tekshirish",
+        "tekshiruv",
+        "проверка",
+        "проверить",
+        "pasportni"
+      ]
+    },
+    {
+      "id": "deport",
+      "kind": "service",
+      "name": {
+        "uz": "Deportni olib tashlash (1 yildan 5 yilgacha)",
+        "tr": "Deport (giriş yasağı) kaldırma — 1 ila 5 yıl",
+        "ru": "Снятие депорта (от 1 до 5 лет)"
+      },
+      "price": 2600,
+      "currency": "USD",
+      "prepayment": 600,
+      "description": {
+        "uz": "Turkiyaga kirish taqig'i (deport) 1 yildan 5 yilgacha bo'lsa, uni olib tashlash bo'yicha ish olib boramiz.",
+        "tr": "1 ila 5 yıllık Türkiye giriş yasağının (deport) kaldırılması için işlemleri yürütüyoruz.",
+        "ru": "Ведём работу по снятию запрета на въезд в Турцию (депорта) сроком от 1 до 5 лет."
+      },
+      "documents": {
+        "uz": [
+          "Pasport rasmi (PDF yoki skaner)",
+          "Deport haqidagi hujjat bo'lsa — uning nusxasi",
+          "Barcha hujjatlar PDF (skaner) shaklida WhatsApp orqali yuboriladi"
+        ],
+        "tr": [
+          "Pasaport fotoğrafı (PDF veya tarama)",
+          "Varsa deport belgesinin kopyası",
+          "Tüm evraklar PDF (tarama) olarak WhatsApp üzerinden gönderilir"
+        ],
+        "ru": [
+          "Фото паспорта (PDF или скан)",
+          "Копия документа о депорте, если есть",
+          "Все документы отправляются в PDF (скан) через WhatsApp"
+        ]
+      },
+      "details_question": {
+        "uz": "Deport qachon va necha yilga qo'yilgan (1–5 yil)?",
+        "tr": "Deport ne zaman ve kaç yıllığına konuldu (1–5 yıl)?",
+        "ru": "Когда и на сколько лет поставлен депорт (1–5 лет)?"
+      },
+      "keywords": [
+        "deport",
+        "deportni",
+        "депорт",
+        "депорта",
+        "yasak",
+        "yasağı",
+        "taqiq",
+        "taqiqi",
+        "kirish",
+        "запрет",
+        "въезд",
+        "qora",
+        "chiqarib"
+      ],
+      "ask_quantity": false
+    },
+    {
+      "id": "ish-beruvchi",
+      "kind": "service",
+      "name": {
+        "uz": "Turkiyada ishlash uchun hujjatlar (ish beruvchi orqali)",
+        "tr": "Türkiye'de çalışma için evrak işlemleri (işveren üzerinden)",
+        "ru": "Документы для работы в Турции (через работодателя)"
+      },
+      "price": 800,
+      "currency": "USD",
+      "description": {
+        "uz": "Turkiyadagi ish beruvchingiz (boshlig'ingiz) kerakli hujjatlarni yuborsa, rasmiylashtirishni biz qilamiz. Kerakli hujjatlar ro'yxatini o'zimiz tashlab beramiz.",
+        "tr": "Türkiye'deki işvereniniz gerekli evrakları gönderirse işlemleri biz yaparız. Gerekli evrak listesini size iletiyoruz.",
+        "ru": "Если ваш работодатель в Турции пришлёт нужные документы, оформление берём на себя. Список документов отправим сами."
+      },
+      "documents": {
+        "uz": [
+          "Vergi levhası (soliq guvohnomasi)",
+          "İmza sirküleri (imzo namunasi)",
+          "Oda sicil kaydı (savdo palatasi ro'yxati)",
+          "Son yılın gelir beyannamesi (oxirgi yil daromad deklaratsiyasi)",
+          "İşletme belgesi (korxona guvohnomasi)",
+          "Barcha hujjatlar PDF (skaner) shaklida WhatsApp orqali yuboriladi"
+        ],
+        "tr": [
+          "Vergi levhası",
+          "İmza sirküleri",
+          "Oda sicil kaydı",
+          "Son yılın gelir beyannamesi",
+          "İşletme belgesi",
+          "Tüm evraklar PDF (tarama) olarak WhatsApp üzerinden gönderilir"
+        ],
+        "ru": [
+          "Vergi levhası (налоговое свидетельство)",
+          "İmza sirküleri (образец подписи)",
+          "Oda sicil kaydı (регистрация в торговой палате)",
+          "Son yılın gelir beyannamesi (декларация о доходах за последний год)",
+          "İşletme belgesi (свидетельство предприятия)",
+          "Все документы отправляются в PDF (скан) через WhatsApp"
+        ]
+      },
+      "details_question": {
+        "uz": "Ish beruvchingiz Turkiyaning qaysi shahrida va hujjatlarni yubora oladimi?",
+        "tr": "İşvereniniz hangi şehirde ve evrakları gönderebilir mi?",
+        "ru": "В каком городе Турции ваш работодатель и может ли он прислать документы?"
+      },
+      "keywords": [
+        "ish",
+        "ishlash",
+        "ishga",
+        "ish beruvchi",
+        "boshliq",
+        "boshlig'im",
+        "işveren",
+        "çalışma",
+        "calisma",
+        "iş",
+        "работа",
+        "работодатель",
+        "работать",
+        "viza",
+        "vize",
+        "виза"
+      ]
+    }
+  ]
+}
