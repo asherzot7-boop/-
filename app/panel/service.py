@@ -6,7 +6,7 @@ ever leaves this module, only whether it is set.
 from __future__ import annotations
 
 from collections import Counter, defaultdict
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
@@ -93,7 +93,7 @@ async def connections(session: AsyncSession, settings, now: datetime | None = No
     out.append(item("sheets", "Google Sheets жадвали", "Пул ва ҳисобот", {"SALES_SHEETS_WEBHOOK_URL": _set(settings.sales_sheets_webhook_url)},
                     "Apps Script веб-иловаси манзили (README)", ()))
     backups = sorted(Path(settings.backup_dir).glob("agent_backup_*.zip")) if Path(settings.backup_dir).exists() else []
-    last_backup = datetime.utcfromtimestamp(backups[-1].stat().st_mtime) if backups else None
+    last_backup = datetime.fromtimestamp(backups[-1].stat().st_mtime, UTC).replace(tzinfo=None) if backups else None
     b = item("backup", "Захира нусха", "Пул ва ҳисобот", {"BACKUP": bool(last_backup)}, "install.bat кунлик захирани ёқади", (),
              f"{len(backups)} та нусха, {settings.backup_dir}" if backups else "Ҳали нусха олинмаган")
     b["last_activity"] = _iso(last_backup)
