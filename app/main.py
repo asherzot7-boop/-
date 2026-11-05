@@ -5,6 +5,7 @@
     python -m app.main migrate    # only apply database migrations
     python -m app.main seed       # add sample data for a demo
     python -m app.main sales      # chat with the sales agent as a client
+    python -m app.main backup     # zip the database and client documents (--to <folder>)
 """
 from __future__ import annotations
 
@@ -236,8 +237,9 @@ async def seed(settings: Settings) -> None:
 
 def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser(prog="python -m app.main")
-    parser.add_argument("mode", nargs="?", default="run", choices=["run", "demo", "migrate", "seed", "sales"])
+    parser.add_argument("mode", nargs="?", default="run", choices=["run", "demo", "migrate", "seed", "sales", "backup"])
     parser.add_argument("--as-id", type=int, default=None, help="demo: Telegram ID (default: first director)")
+    parser.add_argument("--to", default=None, help="backup: destination folder (default BACKUP_DIR)")
     parser.add_argument("--channel", default="console", help="sales: channel name to simulate (instagram, whatsapp, telegram, phone)")
     a = parser.parse_args(argv)
 
@@ -248,6 +250,10 @@ def main(argv: list[str] | None = None) -> None:
         log.info("Миграциялар қўлланди")
     elif a.mode == "demo":
         asyncio.run(demo_console(settings, a.as_id or (settings.director_ids[0] if settings.director_ids else DEMO_DIRECTOR_ID)))
+    elif a.mode == "backup":
+        from app.backup import make_backup
+
+        print(make_backup(settings, a.to))
     elif a.mode == "sales":
         asyncio.run(sales_console(settings, a.channel, "console-client"))
     elif a.mode == "seed":

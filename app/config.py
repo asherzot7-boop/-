@@ -49,6 +49,8 @@ class Settings(BaseSettings):
     api_enabled: bool = True
 
     log_level: str = "INFO"
+    backup_dir: str = "data/backups"  # python -m app.main backup; point at a Google Drive folder for a cloud copy
+    backup_keep: int = 14
 
     # ---- Sales agent (Instagram / WhatsApp / Telegram / phone) ----
     sales_enabled: bool = True

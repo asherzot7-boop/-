@@ -1,0 +1,11 @@
+# Cloudflare Tunnel sozlamasi. Nusxa: %USERPROFILE%\.cloudflared\config.yml
+# <TUNNEL-ID> va agent.SIZNING-DOMEN.uz ni o'zingiznikiga almashtiring.
+tunnel: <TUNNEL-ID>
+credentials-file: C:\Users\<FOYDALANUVCHI>\.cloudflared\<TUNNEL-ID>.json
+
+ingress:
+  # Internetga faqat webhook'lar ochiladi; /api va boshqalar yopiq qoladi.
+  - hostname: agent.SIZNING-DOMEN.uz
+    path: ^/webhooks/
+    service: http://127.0.0.1:8000
+  - service: http_status:404

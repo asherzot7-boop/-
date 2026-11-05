@@ -38,6 +38,10 @@ python -m app.main demo     # Telegram ўрнига консол
 3. `python -m app.main` — миграцияларни қўллайди ва бот, API ҳамда автоматикани ишга туширади.
 4. Ихтиёрий: `OPENAI_API_KEY` берилса, агентлар AI'дан фойдаланади. AI ишламай қолса, автоматик равишда қоида асосидаги режимга қайтади.
 
+## Windows ноутбукда
+
+`deploy\windows\install.bat` ни икки марта босинг. Батафсил йўриқнома: [deploy/windows/README.md](deploy/windows/README.md). Унда автоматик ишга тушиш, уйқуни ўчириш, Google Drive'га кунлик захира ва Cloudflare Tunnel ёритилган.
+
 ## Docker (сервер)
 
 ```bash
@@ -238,6 +242,7 @@ TEST_DATABASE_URL=postgresql+asyncpg://user@host:5432/testdb pytest -q      # Po
 | aiogram бот (сохта Telegram сессияси) | `tests/test_bot_e2e.py` |
 | Сотув агенти: тиллар, воронка, буюртма, Meta/Twilio webhook | `tests/test_12_salesbot.py` |
 | Сотув агенти, тўлиқ версия: файллар, овоз, тўлов, `/reply`, эслатма, жадвал | `tests/test_13_sales_full.py` |
+| Захира нусха (база + ҳужжатлар, эскиларини ўчириш) | `tests/test_14_backup.py` |
 
 ## Тузилма
 
