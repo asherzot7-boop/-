@@ -101,6 +101,10 @@ async def sales_reminder_loop(c: Container) -> None:
                 n = await c.sales.remind_stale()
                 if n:
                     log.info("Сотув эслатмалари юборилди: %s", n)
+            # privacy: delete expired client files even while automation is paused
+            n = await c.sales.purge_files()
+            if n:
+                log.info("Муддати ўтган мижоз файллари ўчирилди: %s", n)
         except asyncio.CancelledError:
             raise
         except Exception:

@@ -8,7 +8,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException, Request
-from fastapi.responses import FileResponse, HTMLResponse
+from fastapi.responses import HTMLResponse, Response
 from pydantic import BaseModel, Field
 
 from app.api.routes import require_token
@@ -74,10 +74,22 @@ async def file(request: Request, file_id: int):
     if f is None or not f.path:
         raise HTTPException(404, "Файл йўқ")
     path = Path(f.path).resolve()
-    root = Path(request.app.state.settings.sales_files_dir).resolve()
+    settings = request.app.state.settings
+    root = Path(settings.sales_files_dir).resolve()
     if not path.is_relative_to(root) or not path.exists():
         raise HTTPException(404, "Файл йўқ")
-    return FileResponse(path, media_type=f.mime or None, filename=f.file_name, content_disposition_type="inline")
+    from app.salesbot import media
+
+    key = settings.sales_files_key.get_secret_value() if settings.sales_files_key else None
+    try:
+        data = media.read(path, key)
+    except Exception:
+        raise HTTPException(500, "Файлни очиб бўлмади (шифрлаш калити?)") from None
+    await _audit(request, "file.viewed", f.lead_id, {"file": f.file_name})
+    from urllib.parse import quote
+
+    return Response(data, media_type=f.mime or "application/octet-stream", headers={
+        "Content-Disposition": f"inline; filename*=UTF-8''{quote(f.file_name)}", "Cache-Control": "no-store"})
 
 
 class TextIn(BaseModel):

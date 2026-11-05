@@ -10,3 +10,6 @@ pydantic==2.13.5
 pydantic-settings==2.16.0
 openai==3.35.1
 httpx==0.28.1
+cryptography==50.0.2
+anthropic==2.5.0
+fpdf2==2.9.0

@@ -237,6 +237,10 @@ async function viewDirector() {
       h("section", { class: "card" }, h("h2", {}, "Тиллар"),
         meterTable(d.by_language, [{ t: "Тил", k: "name" }, { t: "", k: "leads", meter: true }, { t: "Мижоз", k: "leads", n: true }]))),
     h("p", { class: "muted" }, `Менежерга ўтган: ${t.handoff} · Рад этган: ${t.lost}`),
+    h("section", { class: "card" }, h("h2", {}, "Ҳужжатларга кириш журнали"),
+      h("p", { class: "muted", style: "margin:0" }, "Ким, қачон мижоз ҳужжатини очди ёки юборди. Ўчирилган файллар ҳам шу ерда."),
+      meterTable(d.access.map(a => ({ ...a, leads: 0 })), [{ t: "Вақт", k: "time", f: r => fmtTime(r.time) }, { t: "Амал", k: "action" },
+        { t: "Лид", f: r => r.lead_id ? "#" + r.lead_id : "—" }, { t: "Файл", f: r => r.details.file || (r.details.count ? r.details.count + " та" : "") }])),
   ];
 }
 

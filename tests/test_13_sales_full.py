@@ -44,7 +44,7 @@ class FakeTranscriber:
 async def full(tmp_path):
     settings = make_settings(tmp_path, sales_catalog_path=str(CATALOG), sales_catalog_from_books=False, sales_manager_ids=[MANAGER],
                              sales_shop_name="Jihan Jan Jasur Nam Tour", sales_files_dir=str(tmp_path / "files"),
-                             sales_payment_provider="card", sales_payment_card="8600 1234 5678 9012 (Jasur N.)", sales_usd_rate=12800,
+                             sales_payment_provider="card", sales_payment_card="8600 1234 5678 9012 (Jasur N.)", sales_usd_rate=12800, sales_consent_required=False,
                              api_token="secret-token")
     e = await build_env(settings)
     e.notifier = ConsoleNotifier()

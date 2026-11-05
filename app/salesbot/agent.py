@@ -17,6 +17,7 @@ import logging
 import re
 from dataclasses import dataclass, field
 from datetime import timedelta
+from pathlib import Path
 from typing import Protocol
 
 from sqlalchemy import select
@@ -302,6 +303,9 @@ class SalesAgent:
                           display_name: str | None = None, phone: str | None = None, extra: dict | None = None) -> AgentReply:
         """A document, photo or voice message. data=None -> the channel could not download it."""
         name = media.safe_name(file_name, mime, kind)
+        if kind != "audio" and self.settings.sales_consent_required and not await self._has_consent(channel, external_id):
+            # No document is stored before the client agrees; the bytes are dropped.
+            return await self._ask_consent(channel, external_id, message_id, display_name, extra)
         if kind == "audio" and data and self.transcriber is not None and self.transcriber.enabled:
             text = await self.transcriber.transcribe(data, name)
             if text:
@@ -319,7 +323,7 @@ class SalesAgent:
         title = {"audio": "🎤 Овозли хабар", "photo": "🖼 Расм"}.get(kind, "📎 Ҳужжат")
         card = f"{title} — лид #{lead.id} ({CHANNEL_NAMES.get(channel, channel)}, {who})\n{name}" + (f"\nИзоҳ: {caption}" if caption else "")
         if row.path:
-            await self._notify_file(row.path, card)
+            await self._notify_file(row.path, name, card, lead.id)
         else:
             await self._notify(card + "\n(файлни юклаб бўлмади)")
         if too_big:
@@ -353,7 +357,7 @@ class SalesAgent:
             path = None
             if data:
                 try:
-                    path = str(media.store(self.settings.sales_files_dir, lead.id, name, data))
+                    path = str(media.store(self.settings.sales_files_dir, lead.id, name, data, self._files_key()))
                 except OSError as exc:
                     log.error("Файл сақланмади: %s", exc)
             row = LeadFile(lead_id=lead.id, channel=channel, kind=kind, file_name=name, mime=mime, size=len(data or b""), path=path,
@@ -525,13 +529,68 @@ class SalesAgent:
         except Exception as exc:
             log.warning("Google Sheets'га ёзилмади: %s", type(exc).__name__)
 
-    async def _notify_file(self, path: str, caption: str) -> None:
+    async def _notify_file(self, path: str, name: str, caption: str, lead_id: int) -> None:
         send_file = getattr(self.notifier, "send_file", None)
         if send_file is None:
             await self._notify(caption)
             return
-        for tid in await self._manager_ids():
-            await send_file(tid, path, caption)
+        data = media.read(path, self._files_key())
+        ids = await self._manager_ids()
+        for tid in ids:
+            await send_file(tid, data, name, caption)
+        await self._audit("file.forwarded", lead_id, {"file": name, "to": ids})
+
+    def _files_key(self) -> str | None:
+        k = self.settings.sales_files_key
+        return k.get_secret_value() if k is not None and k.get_secret_value() else None
+
+    async def _audit(self, action: str, lead_id: int | None, details: dict | None = None) -> None:
+        from app.security import audit
+
+        async with self.sf() as s:
+            await audit.log_action(s, action, None, "lead", lead_id, details or {})
+            await s.commit()
+
+    # ------------------------------------------------------------ data protection
+    async def _has_consent(self, channel: str, external_id: str) -> bool:
+        async with self.sf() as s:
+            lead = await self._current_lead(s, channel, external_id)
+            return bool(lead and (lead.extra or {}).get("consent"))
+
+    async def _ask_consent(self, channel, external_id, message_id, display_name, extra) -> AgentReply:
+        async with self.sf() as s:
+            lead = await self._current_lead(s, channel, external_id)
+            if lead is None:
+                lead = Lead(channel=channel, external_id=external_id, language=self.settings.sales_default_language, stage=LeadStage.NEED,
+                            display_name=display_name, name=_first_name(display_name))
+                s.add(lead)
+                await s.flush()
+            lead.extra = {**(lead.extra or {}), **(extra or {}), "consent_pending": True}
+            text = L.text(lead.language, "consent", days=self.settings.sales_file_retention_days)
+            s.add(LeadMessage(lead_id=lead.id, channel=channel, direction="out", text=text))
+            await s.commit()
+            return AgentReply(text, lead_id=lead.id, language=lead.language)
+
+    async def purge_files(self, now=None) -> int:
+        """Delete client files N days after the client's last message. The database row stays, marked as purged."""
+        now = now or utcnow()
+        limit = now - timedelta(days=self.settings.sales_file_retention_days)
+        removed = 0
+        async with self.sf() as s:
+            rows = (await s.execute(select(LeadFile, Lead).join(Lead, Lead.id == LeadFile.lead_id)
+                                    .where(LeadFile.path.is_not(None), Lead.last_message_at < limit))).all()
+            for f, _lead in rows:
+                try:
+                    Path(f.path).unlink(missing_ok=True)
+                except OSError as exc:
+                    log.warning("Файл ўчирилмади: %s", exc)
+                    continue
+                f.path = None
+                removed += 1
+            await s.commit()
+        if removed:
+            await self._audit("file.purged", None, {"count": removed, "older_than_days": self.settings.sales_file_retention_days})
+        return removed
 
     async def _manager_ids(self) -> list[int]:
         ids = list(self.settings.sales_manager_ids)
@@ -564,6 +623,12 @@ class SalesAgent:
     async def _step(self, s: AsyncSession, lead: Lead, text: str, products: list[cat.Product], notices: list[str], voice: bool) -> AgentReply:
         lg = lead.language
         shop = self.settings.sales_shop_name
+
+        if (lead.extra or {}).get("consent_pending") and text:
+            norm = L.normalize(text)
+            if L.CONSENT.search(text) or L.CONSENT.search(norm):
+                lead.extra = {**{k: v for k, v in lead.extra.items() if k != "consent_pending"}, "consent": utcnow().isoformat(timespec="seconds")}
+                return AgentReply(L.text(lg, "consent_ok"))
 
         if lead.stage == LeadStage.HANDOFF:
             if not text:

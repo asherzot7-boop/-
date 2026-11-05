@@ -23,13 +23,43 @@ def safe_name(name: str | None, mime: str | None, kind: str) -> str:
     return base
 
 
-def store(root: str | Path, lead_id: int, name: str, data: bytes) -> Path:
-    """Write under <root>/<lead_id>/<uuid>_<name>; the name is sanitised, so a client cannot choose the path."""
+def _fernet(key: str | None):
+    if not key:
+        return None
+    from cryptography.fernet import Fernet
+
+    return Fernet(key.encode() if isinstance(key, str) else key)
+
+
+def new_key() -> str:
+    """A fresh SALES_FILES_KEY (Fernet: AES-128-CBC + HMAC-SHA256)."""
+    from cryptography.fernet import Fernet
+
+    return Fernet.generate_key().decode()
+
+
+def store(root: str | Path, lead_id: int, name: str, data: bytes, key: str | None = None) -> Path:
+    """Write under <root>/<lead_id>/<uuid>_<name>; the name is sanitised, so a client cannot choose the path.
+    With a key the bytes are encrypted and the file gets a .enc suffix: a copied folder or backup is unreadable without it."""
     folder = Path(root) / str(int(lead_id))
     folder.mkdir(parents=True, exist_ok=True)
     path = folder / f"{uuid.uuid4().hex[:8]}_{safe_name(name, None, 'document')}"
+    f = _fernet(key)
+    if f is not None:
+        path = path.with_name(path.name + ".enc")
+        data = f.encrypt(data)
     path.write_bytes(data)
     return path
+
+
+def read(path: str | Path, key: str | None = None) -> bytes:
+    data = Path(path).read_bytes()
+    if str(path).endswith(".enc"):
+        f = _fernet(key)
+        if f is None:
+            raise ValueError("SALES_FILES_KEY берилмаган: шифрланган файлни очиб бўлмайди")
+        return f.decrypt(data)
+    return data
 
 
 class Transcriber:

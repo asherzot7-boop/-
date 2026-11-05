@@ -54,6 +54,11 @@ if (-not (Test-Path "$Root\.env")) {
     $lines = (Get-Content "$Root\.env" -Encoding UTF8) -replace '^API_TOKEN=$', "API_TOKEN=$tok"
     [IO.File]::WriteAllLines("$Root\.env", $lines, (New-Object System.Text.UTF8Encoding($false)))
     Write-Host "Panel paroli (API_TOKEN): $tok" -ForegroundColor Green
+    # Mijoz fayllarini shifrlash kaliti
+    $fk = & $Py -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+    $lines = (Get-Content "$Root\.env" -Encoding UTF8) -replace '^SALES_FILES_KEY=$', "SALES_FILES_KEY=$fk"
+    [IO.File]::WriteAllLines("$Root\.env", $lines, (New-Object System.Text.UTF8Encoding($false)))
+    Write-Host "Shifrlash kaliti yaratildi (.env -> SALES_FILES_KEY). Uni alohida joyda saqlang: yo'qolsa, fayllarni ochib bo'lmaydi." -ForegroundColor Yellow
     Write-Host ".env yaratildi. Hozir Bloknot ochiladi: SALES_BOT_TOKEN, SALES_MANAGER_IDS va boshqalarni to'ldiring, saqlang va yoping."
     Start-Process notepad.exe "$Root\.env" -Wait
 } else {

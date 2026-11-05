@@ -157,6 +157,8 @@ TEXTS: dict[str, dict[str, str]] = {
         "prepay": "Oldindan to'lov: {amount}.",
         "prepay_short": "oldindan to'lov {amount}",
         "result_time": "Natija: {time}.",
+        "consent": "Hujjatlaringizni faqat arizangizni rasmiylashtirish uchun shifrlangan holda saqlaymiz va xizmat tugagach {days} kundan keyin o'chiramiz. Rozimisiz? «Roziman» deb yozing, keyin hujjatni qayta yuboring.",
+        "consent_ok": "Rahmat! Endi hujjatni qayta yuboring.",
         "file_received": "Hujjat qabul qilindi ✅ (jami {n} ta). Konsultantimiz ko'rib chiqadi.",
         "file_failed": "Faylni ololmadim. Iltimos, PDF yoki rasm ko'rinishida qayta yuboring.",
         "file_too_big": "Fayl juda katta ({mb} MB dan oshmasin). Iltimos, kichikroq qilib yuboring.",
@@ -207,6 +209,8 @@ TEXTS: dict[str, dict[str, str]] = {
         "prepay": "Ön ödeme: {amount}.",
         "prepay_short": "ön ödeme {amount}",
         "result_time": "Sonuç: {time}.",
+        "consent": "Belgelerinizi yalnızca başvurunuz için şifreli olarak saklıyor ve hizmet bittikten {days} gün sonra siliyoruz. Onaylıyor musunuz? «Onaylıyorum» yazın, sonra belgeyi tekrar gönderin.",
+        "consent_ok": "Teşekkürler! Şimdi belgeyi tekrar gönderin.",
         "file_received": "Belge alındı ✅ (toplam {n}). Danışmanımız inceleyecek.",
         "file_failed": "Dosyayı alamadım. Lütfen PDF veya fotoğraf olarak tekrar gönderin.",
         "file_too_big": "Dosya çok büyük ({mb} MB'ı geçmemeli). Lütfen daha küçük gönderin.",
@@ -257,6 +261,8 @@ TEXTS: dict[str, dict[str, str]] = {
         "prepay": "Предоплата: {amount}.",
         "prepay_short": "предоплата {amount}",
         "result_time": "Результат: {time}.",
+        "consent": "Мы храним ваши документы в зашифрованном виде только для оформления заявки и удаляем их через {days} дней после окончания услуги. Вы согласны? Напишите «Согласен», затем отправьте документ ещё раз.",
+        "consent_ok": "Спасибо! Теперь отправьте документ ещё раз.",
         "file_received": "Документ получен ✅ (всего {n}). Консультант его посмотрит.",
         "file_failed": "Не удалось получить файл. Пришлите, пожалуйста, ещё раз в виде PDF или фото.",
         "file_too_big": "Файл слишком большой (не больше {mb} МБ). Пришлите, пожалуйста, поменьше.",
@@ -290,6 +296,7 @@ _TRANSLIT_KEYS = {"product", "desc", "catalog", "docs"}
 
 
 # ----------------------------------------------------------------- vocabularies for intent detection
+CONSENT = re.compile(r"roziman|rozimiz|розиман|onaylıyorum|onayliyorum|kabul ediyorum|согласен|согласна|согласны", re.IGNORECASE)
 YES = {"ha", "xa", "ha'", "albatta", "ok", "okay", "ok'", "bo'ladi", "boladi", "to'g'ri", "togri", "roziman", "mayli", "tasdiqlayman",
        "evet", "tamam", "olur", "doğru", "dogru", "onaylıyorum", "da", "da'", "verno", "xorosho", "podtverjdayu", "aga", "+"}
 NO = {"yo'q", "yoq", "yo'q.", "hayır", "hayir", "net", "noto'g'ri", "notogri", "yanlış", "neverno"}

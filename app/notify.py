@@ -29,11 +29,11 @@ class TelegramNotifier:
                 log.warning("Хабар юборилмади (%s): %s", telegram_id, type(exc).__name__)
 
 
-    async def send_file(self, telegram_id: int, path: str, caption: str) -> None:
-        from aiogram.types import FSInputFile
+    async def send_file(self, telegram_id: int, data: bytes, filename: str, caption: str) -> None:
+        from aiogram.types import BufferedInputFile
 
         try:
-            await self.bot.send_document(telegram_id, FSInputFile(path), caption=caption[:1000])
+            await self.bot.send_document(telegram_id, BufferedInputFile(data, filename=filename), caption=caption[:1000])
         except Exception as exc:
             log.warning("Файл юборилмади (%s): %s", telegram_id, type(exc).__name__)
             await self.send(telegram_id, caption)
@@ -49,9 +49,9 @@ class ConsoleNotifier:
         self.sent.append((telegram_id, text))
         log.info("[demo хабар → %s]\n%s", telegram_id, text)
 
-    async def send_file(self, telegram_id: int, path: str, caption: str) -> None:
-        self.sent.append((telegram_id, f"{caption}\n[файл: {path}]"))
-        log.info("[demo файл → %s] %s", telegram_id, path)
+    async def send_file(self, telegram_id: int, data: bytes, filename: str, caption: str) -> None:
+        self.sent.append((telegram_id, f"{caption}\n[файл: {filename}]"))
+        log.info("[demo файл → %s] %s (%s байт)", telegram_id, filename, len(data))
 
 
 async def director_ids(session: AsyncSession) -> list[int]:

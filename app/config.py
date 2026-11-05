@@ -80,6 +80,11 @@ class Settings(BaseSettings):
     # ---- Sales agent: full version ----
     sales_files_dir: str = "data/lead_files"  # documents, photos and voice messages from clients
     sales_max_file_mb: int = 20
+    # Data protection: Fernet key encrypts client files on disk; files are deleted N days after the last message;
+    # clients must agree before the first document is stored.
+    sales_files_key: SecretStr | None = None
+    sales_file_retention_days: int = 90
+    sales_consent_required: bool = True
     sales_stt_model: str = "whisper-1"  # voice messages -> text (needs OPENAI_API_KEY)
     # Reminder to clients who stopped halfway. Meta lets a business reply freely only within 24 h.
     sales_reminder_hours: float = 20
@@ -121,7 +126,7 @@ class Settings(BaseSettings):
         out = []
         for s in (self.bot_token, self.openai_api_key, self.api_token, self.sales_bot_token, self.meta_verify_token, self.meta_app_secret,
                   self.instagram_access_token, self.messenger_page_token, self.whatsapp_access_token, self.twilio_auth_token,
-                  self.sales_sheets_webhook_url):
+                  self.sales_sheets_webhook_url, self.sales_files_key):
             if s is not None and s.get_secret_value():
                 out.append(s.get_secret_value())
         return out

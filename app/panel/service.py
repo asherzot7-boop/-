@@ -155,6 +155,10 @@ async def director(session: AsyncSession, settings, days: int = 30, now: datetim
             pos = 0
         for s in FUNNEL[: (pos or 0) + 1]:
             reached[s] += 1
+    from app.database.models import AuditLog
+
+    access = list(await session.scalars(select(AuditLog).where(AuditLog.action.in_(["file.viewed", "file.forwarded", "file.purged"]))
+                                        .order_by(AuditLog.id.desc()).limit(20)))
     upsell = [x for x in leads if (x.extra or {}).get("from_lead")]
     money = lambda d: [{"currency": c, "amount": v, "text": cat.money(v, c, "uzc")} for c, v in sorted(d.items()) if v]
     return {
@@ -168,6 +172,9 @@ async def director(session: AsyncSession, settings, days: int = 30, now: datetim
         "by_language": group(lambda x: LANG_NAMES.get(x.language, x.language)),
         "daily": [{"day": d, **v} for d, v in daily.items()],
         "funnel": [{"stage": STAGE_NAMES[s], "count": reached[s]} for s in FUNNEL],
+        "access": [{"time": _iso(a.created_at), "action": {"file.viewed": "Панелда очилди", "file.forwarded": "Менежерга юборилди",
+                                                            "file.purged": "Автоматик ўчирилди"}[a.action],
+                    "lead_id": a.entity_id, "details": a.details or {}} for a in access],
     }
 
 

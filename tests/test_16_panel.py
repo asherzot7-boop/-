@@ -28,7 +28,7 @@ async def panel(tmp_path):
     settings = make_settings(tmp_path, api_token="panel-secret", sales_catalog_path=str(ROOT / "sales_catalog.json"),
                              sales_faq_path=str(ROOT / "sales_faq.json"), sales_catalog_from_books=False, sales_manager_ids=[777],
                              sales_files_dir=str(tmp_path / "files"), sales_payment_card="8600 0000 0000 0000", sales_usd_rate=12800,
-                             sales_bot_token="123:SECRET-TELEGRAM", backup_dir=str(tmp_path / "backups"))
+                             sales_bot_token="123:SECRET-TELEGRAM", backup_dir=str(tmp_path / "backups"), sales_consent_required=False)
     e = await build_env(settings)
     e.sender = FakeSender()
     out = Outbound()
