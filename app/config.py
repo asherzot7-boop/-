@@ -100,6 +100,13 @@ class Settings(BaseSettings):
     sales_payment_link_template: str | None = None  # e.g. https://pay.example/{lead_id}?amount={amount}&uzs={amount_uzs}
     # Google Sheets: Apps Script web app URL that appends a row (see README)
     sales_sheets_webhook_url: SecretStr | None = None
+    # Re-engagement of clients who stopped 25-60 days ago. WhatsApp needs an approved template name.
+    sales_reengage_enabled: bool = True
+    whatsapp_reengage_template: str | None = None
+    # Human names for ad / post ids in reports, JSON: {"120210000000": "Deport, oktyabr reklamasi"}
+    sales_source_names: dict = Field(default_factory=dict)
+    # Site chat widget: origins allowed to call /webhooks/web (comma separated, * = any)
+    sales_web_origins: str = "*"
     # Knowledge base: curated answers (JSON) + answers managers gave with /answer
     sales_faq_path: str | None = "sales_faq.json"
     # Instagram comments: intent (reply to questions/prices only) | all | off

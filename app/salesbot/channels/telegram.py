@@ -68,7 +68,11 @@ def build_sales_router(agent: SalesAgent) -> Router:
         if message.contact is not None:
             phone = message.contact.phone_number
             text = text or phone
+        source = None
         if text.startswith("/start"):
+            payload = text[6:].strip()
+            if payload:
+                source = {"type": "link", "id": payload[:64]}
             text = ""
         channel = "telegram_business" if business else "telegram"
         extra = {"business_connection_id": message.business_connection_id} if business and message.business_connection_id else None
@@ -82,7 +86,7 @@ def build_sales_router(agent: SalesAgent) -> Router:
                                             caption=message.caption, message_id=msg_id, display_name=message.from_user.full_name, extra=extra)
         else:
             reply = await agent.handle(channel, str(message.chat.id), text, display_name=message.from_user.full_name, phone=phone,
-                                       message_id=msg_id, extra=extra)
+                                       message_id=msg_id, extra=extra, source=source)
         if not reply.text:
             return
         if business:

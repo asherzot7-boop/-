@@ -25,6 +25,23 @@ class Incoming:
     # file: {"kind": document|photo|audio, "url": ... (Instagram/Messenger) or "media_id": ... (WhatsApp), "name", "mime"}
     attachment: dict | None = None
     comment_id: str | None = None  # Instagram comment: answer privately in Direct + a short public reply
+    source: dict | None = None  # where the client came from: {"type": "ad"|"post"|"link", "id", "name"}
+
+
+def _ig_source(ref: dict | None) -> dict | None:
+    if not ref:
+        return None
+    if ref.get("ad_id") or ref.get("source") == "ADS":
+        return {"type": "ad", "id": str(ref.get("ad_id") or ref.get("ref") or ""), "name": (ref.get("ads_context_data") or {}).get("ad_title")}
+    return {"type": "link", "id": str(ref.get("ref") or ref.get("source") or ""), "name": None}
+
+
+def _wa_source(ref: dict | None) -> dict | None:
+    """Click-to-WhatsApp ads and post links put a referral object on the first message."""
+    if not ref:
+        return None
+    kind = "ad" if ref.get("source_type") == "ad" else "post"
+    return {"type": kind, "id": str(ref.get("source_id") or ref.get("source_url") or ""), "name": ref.get("headline"), "url": ref.get("source_url")}
 
 
 _IG_KIND = {"image": "photo", "file": "document", "audio": "audio", "video": "document"}
@@ -50,8 +67,11 @@ def parse(payload: dict) -> list[Incoming]:
                 sender = (ev.get("sender") or {}).get("id")
                 if msg.get("is_echo") or not sender:
                     continue
+                src = _ig_source(ev.get("referral") or msg.get("referral"))
                 if msg.get("text"):
-                    out.append(Incoming(channel, str(sender), str(msg["text"]), msg.get("mid")))
+                    out.append(Incoming(channel, str(sender), str(msg["text"]), msg.get("mid"), source=src))
+                elif src and not msg.get("attachments"):
+                    out.append(Incoming(channel, str(sender), "", f"ref:{sender}:{ev.get('timestamp', '')}", source=src))  # ad click, no text yet
                 for i, att in enumerate(msg.get("attachments") or []):
                     kind = _IG_KIND.get(att.get("type"))
                     url = (att.get("payload") or {}).get("url")
@@ -92,7 +112,8 @@ def parse(payload: dict) -> list[Incoming]:
                         body = None
                     sender = msg.get("from")
                     if sender and body:
-                        out.append(Incoming("whatsapp", str(sender), str(body), msg.get("id"), names.get(sender), "+" + str(sender)))
+                        out.append(Incoming("whatsapp", str(sender), str(body), msg.get("id"), names.get(sender), "+" + str(sender),
+                                            source=_wa_source(msg.get("referral"))))
     return out
 
 
@@ -169,6 +190,15 @@ class MetaSender:
         if not token:
             return False
         return await self._post(f"{self.s.meta_graph_url.rstrip('/')}/{comment_id}/replies", {"message": text[:300]}, token, "comment reply")
+
+    async def send_template(self, recipient: str, name: str, lang: str) -> bool:
+        """WhatsApp template message (the only way to write first after the 24-hour window)."""
+        token, phone_id = self._secret(self.s.whatsapp_access_token), self.s.whatsapp_phone_number_id
+        if not token or not phone_id:
+            return False
+        code = {"uz": "uz", "uzc": "uz", "tr": "tr", "ru": "ru"}.get(lang, "uz")
+        body = {"messaging_product": "whatsapp", "to": recipient, "type": "template", "template": {"name": name, "language": {"code": code}}}
+        return await self._post(f"{self.s.meta_graph_url.rstrip('/')}/{phone_id}/messages", body, token, "template")
 
     async def send(self, channel: str, recipient: str, text: str) -> bool:
         base = self.s.meta_graph_url.rstrip("/")

@@ -236,6 +236,8 @@ async function viewDirector() {
           { t: "Ариза", k: "won", n: true }, { t: "%", n: true, f: r => Math.round(100 * r.won / Math.max(1, r.leads)) }])),
       h("section", { class: "card" }, h("h2", {}, "Хизматлар"),
         meterTable(d.by_service, [{ t: "Хизмат", k: "name" }, { t: "Сўради", k: "leads", n: true }, { t: "Ариза", k: "won", n: true }])),
+      h("section", { class: "card" }, h("h2", {}, "Реклама ва манбалар"),
+        meterTable(d.by_source, [{ t: "Манба", k: "name" }, { t: "Мижоз", k: "leads", n: true }, { t: "Ариза", k: "won", n: true }, { t: "Тушум", k: "revenue", n: true }])),
       h("section", { class: "card" }, h("h2", {}, "Тиллар"),
         meterTable(d.by_language, [{ t: "Тил", k: "name" }, { t: "", k: "leads", meter: true }, { t: "Мижоз", k: "leads", n: true }]))),
     h("p", { class: "muted" }, `Менежерга ўтган: ${t.handoff} · Рад этган: ${t.lost}`),

@@ -5,6 +5,10 @@ import hashlib
 import hmac
 import json
 import logging
+import re
+import time
+from collections import defaultdict, deque
+from pathlib import Path
 from urllib.parse import parse_qsl
 
 from fastapi import APIRouter, BackgroundTasks, HTTPException, Request
@@ -52,7 +56,8 @@ async def _process_meta(agent, sender: meta.MetaSender, items: list[meta.Incomin
                                                 file_name=it.attachment.get("name"), mime=it.attachment.get("mime"), caption=it.text or None,
                                                 message_id=it.message_id, display_name=it.name, phone=it.phone)
             else:
-                reply = await agent.handle(it.channel, it.sender, it.text, display_name=it.name, phone=it.phone, message_id=it.message_id)
+                reply = await agent.handle(it.channel, it.sender, it.text, display_name=it.name, phone=it.phone, message_id=it.message_id,
+                                           source=it.source)
             if reply.text:
                 await sender.send(it.channel, it.sender, reply.text)
         except Exception:
@@ -134,3 +139,82 @@ async def twilio_gather(request: Request) -> Response:
     if reply.done:
         return _xml(voice.hangup_twiml(reply.text or L.text(lg, "handoff"), settings, L.text(lg, "bye_voice")))
     return _xml(voice.gather_twiml(reply.text or L.text(lg, "noinput_voice"), settings, action, L.text(lg, "noinput_voice")))
+
+
+# ------------------------------------------------------------------ site chat widget
+_SESSION = re.compile(r"^[A-Za-z0-9_-]{8,64}$")
+_hits: dict[str, deque] = defaultdict(deque)
+WIDGET = Path(__file__).with_name("channels") / "web_widget.js"
+
+
+def _cors(request: Request, response: Response) -> Response:
+    allowed = [o.strip() for o in (request.app.state.settings.sales_web_origins or "").split(",") if o.strip()]
+    origin = request.headers.get("origin")
+    if "*" in allowed:
+        response.headers["Access-Control-Allow-Origin"] = "*"
+    elif origin and origin in allowed:
+        response.headers["Access-Control-Allow-Origin"] = origin
+        response.headers["Vary"] = "Origin"
+    response.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
+    response.headers["Access-Control-Allow-Headers"] = "Content-Type"
+    return response
+
+
+def _limited(request: Request, session: str, per_minute: int = 30) -> bool:
+    """Sliding one-minute window per session and per IP: a public endpoint must not be a free AI proxy."""
+    now = time.monotonic()
+    ip = request.headers.get("cf-connecting-ip") or (request.client.host if request.client else "?")
+    for key in (f"s:{session}", f"ip:{ip}"):
+        q = _hits[key]
+        while q and now - q[0] > 60:
+            q.popleft()
+        if len(q) >= (per_minute if key.startswith("s:") else per_minute * 4):
+            return True
+        q.append(now)
+    if len(_hits) > 50_000:
+        _hits.clear()
+    return False
+
+
+@router.options("/web/chat")
+@router.options("/web/poll")
+async def web_preflight(request: Request) -> Response:
+    return _cors(request, Response(status_code=204))
+
+
+@router.post("/web/chat")
+async def web_chat(request: Request) -> Response:
+    agent = _agent(request)
+    try:
+        body = await request.json()
+    except ValueError:
+        raise HTTPException(400, "bad json")
+    session, text = str(body.get("session") or ""), str(body.get("text") or "")[:1000]
+    if not _SESSION.match(session):
+        raise HTTPException(400, "bad session")
+    if _limited(request, session):
+        return _cors(request, Response(json.dumps({"error": "slow down"}), status_code=429, media_type="application/json"))
+    src = body.get("source") if isinstance(body.get("source"), dict) else None
+    source = {"type": "link", "id": str(src.get("campaign") or src.get("source") or "")[:64], "name": str(src.get("source") or "")[:64] or None} if src and (src.get("campaign") or src.get("source")) else None
+    n = body.get("n")
+    reply = await agent.handle("web", session, text, message_id=f"web:{session}:{int(n)}" if isinstance(n, int) else None, source=source)
+    msgs = await agent.web_messages(session, 0)
+    payload = {"reply": reply.text, "last_id": msgs[-1]["id"] if msgs else 0}
+    return _cors(request, Response(json.dumps(payload, ensure_ascii=False), media_type="application/json"))
+
+
+@router.get("/web/poll")
+async def web_poll(request: Request, session: str, after: int = 0) -> Response:
+    agent = _agent(request)
+    if not _SESSION.match(session):
+        raise HTTPException(400, "bad session")
+    if _limited(request, session, per_minute=40):
+        return _cors(request, Response("[]", status_code=429, media_type="application/json"))
+    msgs = await agent.web_messages(session, after)
+    return _cors(request, Response(json.dumps(msgs, ensure_ascii=False), media_type="application/json"))
+
+
+@router.get("/web/widget.js")
+async def web_widget(request: Request) -> Response:
+    js = WIDGET.read_text(encoding="utf-8").replace("__SHOP__", json.dumps(request.app.state.settings.sales_shop_name, ensure_ascii=False))
+    return Response(js, media_type="application/javascript; charset=utf-8", headers={"Cache-Control": "public, max-age=300"})

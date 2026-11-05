@@ -173,12 +173,38 @@ async def director(session: AsyncSession, settings, days: int = 30, now: datetim
         "by_channel": group(lambda x: CHANNEL_NAMES.get(x.channel, x.channel)),
         "by_service": group(lambda x: (products[x.product_id].title("uzc") if x.product_id in products else x.product_name) if x.product_id else None),
         "by_language": group(lambda x: LANG_NAMES.get(x.language, x.language)),
+        "by_source": _by_source(leads, products, settings),
         "daily": [{"day": d, **v} for d, v in daily.items()],
         "funnel": [{"stage": STAGE_NAMES[s], "count": reached[s]} for s in FUNNEL],
         "access": [{"time": _iso(a.created_at), "action": {"file.viewed": "Панелда очилди", "file.forwarded": "Менежерга юборилди",
                                                             "file.purged": "Автоматик ўчирилди"}[a.action],
                     "lead_id": a.entity_id, "details": a.details or {}} for a in access],
     }
+
+
+def _source_name(x: Lead, settings) -> str:
+    src = (x.extra or {}).get("source")
+    if not src:
+        return "Органик (ўзи ёзди)"
+    kind = {"ad": "Реклама", "post": "Пост", "link": "Ҳавола"}.get(src.get("type"), "Бошқа")
+    sid = str(src.get("id") or "")
+    name = (settings.sales_source_names or {}).get(sid) or src.get("name") or sid or "—"
+    return f"{kind}: {name}"
+
+
+def _by_source(leads, products, settings) -> list[dict]:
+    rows: dict[str, dict] = {}
+    for x in leads:
+        key = _source_name(x, settings)
+        r = rows.setdefault(key, {"name": key, "leads": 0, "won": 0, "revenue": defaultdict(int)})
+        r["leads"] += 1
+        if x.stage == LeadStage.WON:
+            r["won"] += 1
+            cur = x.currency or (products[x.product_id].currency if x.product_id in products else "so'm")
+            r["revenue"][cur] += x.total or 0
+    return [{"name": r["name"], "leads": r["leads"], "won": r["won"],
+             "revenue": " + ".join(cat.money(v, c, "uzc") for c, v in r["revenue"].items() if v) or "0"}
+            for r in sorted(rows.values(), key=lambda r: (-r["won"], -r["leads"]))]
 
 
 # ------------------------------------------------------------------ agent process

@@ -33,7 +33,7 @@ from app.salesbot.models import OPEN_STAGES, FaqEntry, Lead, LeadFile, LeadMessa
 
 log = logging.getLogger(__name__)
 
-CHANNEL_NAMES = {"instagram": "Instagram", "whatsapp": "WhatsApp", "telegram": "Telegram", "telegram_business": "Telegram Business",
+CHANNEL_NAMES = {"web": "Сайт", "instagram": "Instagram", "whatsapp": "WhatsApp", "telegram": "Telegram", "telegram_business": "Telegram Business",
                  "messenger": "Messenger", "phone": "Телефон", "console": "Консол"}
 
 _PHONE = re.compile(r"(?<!\d)(\+?\d[\d\s\-()]{7,18}\d)(?!\d)")
@@ -248,7 +248,7 @@ class SalesAgent:
     # ------------------------------------------------------------ public
     async def handle(self, channel: str, external_id: str, text: str, *, display_name: str | None = None,
                      phone: str | None = None, message_id: str | None = None, extra: dict | None = None,
-                     detect_language: bool = True) -> AgentReply:
+                     detect_language: bool = True, source: dict | None = None) -> AgentReply:
         text = (text or "").strip()[:4000]
         notices: list[str] = []
         async with self.sf() as s:
@@ -271,6 +271,8 @@ class SalesAgent:
                 lead.display_name = display_name
             if extra:
                 lead.extra = {**(lead.extra or {}), **extra}
+            if source and not (lead.extra or {}).get("source"):
+                lead.extra = {**(lead.extra or {}), "source": {k: v for k, v in source.items() if v}}
 
             if text:
                 detected, sure = L.detect(text, lead.language)
@@ -621,6 +623,38 @@ class SalesAgent:
             await s.commit()
         return sent
 
+    async def reengage(self, now=None) -> int:
+        """One message to clients who stopped 25-60 days ago. Telegram and the site: free text; WhatsApp: only an
+        approved template (Meta forbids free text after 24 h); Instagram/Messenger: never (not allowed)."""
+        if self.outbound is None:
+            return 0
+        now = now or utcnow()
+        sent = 0
+        async with self.sf() as s:
+            rows = list(await s.scalars(select(Lead).where(
+                Lead.stage.in_([LeadStage.NEED, LeadStage.QUANTITY, LeadStage.NAME, LeadStage.PHONE, LeadStage.ADDRESS, LeadStage.CONFIRM, LeadStage.LOST]),
+                Lead.last_message_at <= now - timedelta(days=25), Lead.last_message_at >= now - timedelta(days=60))))
+            template = self.settings.whatsapp_reengage_template
+            for lead in rows:
+                ex = lead.extra or {}
+                if ex.get("reengaged") or lead.channel in ("instagram", "messenger", "phone"):
+                    continue
+                if lead.channel == "whatsapp" and not template:
+                    continue
+                lead.extra = {**ex, "reengaged": now.isoformat(timespec="seconds")}
+                if lead.channel == "whatsapp":
+                    ok = await self.outbound.send_template(lead.channel, lead.external_id, template, lead.language)
+                    text = f"[шаблон: {template}]"
+                else:
+                    text = L.text(lead.language, "reengage", name=f", {lead.name}" if lead.name else "",
+                                  service=f" ({lead.product_name})" if lead.product_name else "")
+                    ok = await self.outbound.send(lead.channel, lead.external_id, text, lead.extra)
+                if ok:
+                    s.add(LeadMessage(lead_id=lead.id, channel=lead.channel, direction="out", text=text))
+                    sent += 1
+            await s.commit()
+        return sent
+
     async def _sheets(self, row: dict | None) -> None:
         url = self.settings.sales_sheets_webhook_url
         if row is None or url is None or not url.get_secret_value():
@@ -708,6 +742,14 @@ class SalesAgent:
                 ids = await director_ids(s)
         return ids
 
+    async def web_messages(self, session: str, after: int = 0) -> list[dict]:
+        """Outgoing messages for a site-chat session (agent and manager), newer than `after`."""
+        async with self.sf() as s:
+            rows = await s.scalars(select(LeadMessage).join(Lead, Lead.id == LeadMessage.lead_id).where(
+                Lead.channel == "web", Lead.external_id == session, LeadMessage.direction == "out", LeadMessage.id > after
+            ).order_by(LeadMessage.id).limit(50))
+            return [{"id": m.id, "text": m.text} for m in rows]
+
     async def language_of(self, channel: str, external_id: str) -> str:
         async with self.sf() as s:
             lead = await self._current_lead(s, channel, external_id)
@@ -787,7 +829,9 @@ class SalesAgent:
 
         # knowledge base: approved answer, or the question goes to a manager
         prefix = ""
-        entry = kb.match([f for f in await kb.load_all(s, self.settings.sales_faq_path) if _faq_lang_ok(f, lg)], text)
+        # a price question is answered by the funnel; the knowledge base only adds an answer that matches almost word for word
+        entry = kb.match([f for f in await kb.load_all(s, self.settings.sales_faq_path) if _faq_lang_ok(f, lg)], text,
+                         min_share=0.75 if e.price_question else 0.5)
         if entry is not None:
             answer = entry.text(lg)
             prefix = (L.to_cyrillic(answer) if lg == "uzc" and entry.language == "uz" else answer) + "\n\n"

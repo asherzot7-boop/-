@@ -61,6 +61,9 @@ async def build_container(settings: Settings) -> Container:
 
         outbound = Outbound()
         outbound.register(("instagram", "whatsapp", "messenger"), MetaChannelSender(MetaSender(settings)))
+        from app.salesbot.outbound import WebSender
+
+        outbound.register(("web",), WebSender())
         key = settings.openai_api_key.get_secret_value() if settings.llm_enabled else None
         sales = SalesAgent(sf, settings, model=build_sales_model(settings), outbound=outbound,
                            transcriber=Transcriber(key, settings.sales_stt_model))
@@ -101,6 +104,10 @@ async def sales_reminder_loop(c: Container) -> None:
                 n = await c.sales.remind_stale()
                 if n:
                     log.info("Сотув эслатмалари юборилди: %s", n)
+            if enabled and c.settings.sales_reengage_enabled:
+                n = await c.sales.reengage()
+                if n:
+                    log.info("Эски мижозларга хабар: %s", n)
             # privacy: delete expired client files even while automation is paused
             n = await c.sales.purge_files()
             if n:

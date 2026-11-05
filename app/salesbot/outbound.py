@@ -41,6 +41,16 @@ class MetaChannelSender:
     async def send(self, channel: str, recipient: str, text: str, extra: dict | None = None) -> bool:
         return await self.meta.send(channel, recipient, text)
 
+    async def send_template(self, channel: str, recipient: str, name: str, lang: str) -> bool:
+        return await self.meta.send_template(recipient, name, lang)
+
+
+class WebSender:
+    """The site widget polls for new messages; anything logged for the lead is delivered, so sending is a no-op."""
+
+    async def send(self, channel: str, recipient: str, text: str, extra: dict | None = None) -> bool:
+        return True
+
 
 class Outbound:
     def __init__(self) -> None:
@@ -58,3 +68,8 @@ class Outbound:
         if sender is None:
             return False
         return await sender.send(channel, recipient, text, extra)
+
+    async def send_template(self, channel: str, recipient: str, name: str, lang: str) -> bool:
+        sender = self._senders.get(channel)
+        fn = getattr(sender, "send_template", None)
+        return bool(fn and await fn(channel, recipient, name, lang))

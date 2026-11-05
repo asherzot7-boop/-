@@ -31,7 +31,7 @@ _QUESTION = re.compile(
     r"қандай|қачон|нега|қаерда|неча кун|бўладими|мумкинми",
     re.IGNORECASE,
 )
-_FAQ_STOP = {s[:5] for s in ("qanday", "qachon", "qancha", "kerak", "bo'ladi", "bormi", "sizlar", "sizda", "bizga", "menga", "nasil", "zaman",
+_FAQ_STOP = {s.replace("'", "")[:5] for s in ("qanday", "qachon", "qancha", "kerak", "bo'ladi", "bormi", "sizlar", "sizda", "bizga", "menga", "nasil", "zaman",
                               "kadar", "nerede", "kogda", "skolko", "mozhno", "nuzhno", "uchun", "icin", "dlya", "salom", "assalomu", "merhaba",
                               "zdravstvuyte", "iltimos", "lutfen", "pozhaluysta", "rahmat")}
 
