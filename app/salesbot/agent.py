@@ -858,7 +858,6 @@ class SalesAgent:
         def delta(c, p):
             return f"{c} (ўтган ҳафта {p}{', ' + ('+' if c >= p else '') + str(round(100 * (c - p) / p)) + '%' if p else ''})"
 
-        order = [LeadStage.NEED, LeadStage.QUANTITY, LeadStage.NAME, LeadStage.PHONE, LeadStage.ADDRESS, LeadStage.CONFIRM, LeadStage.WON]
         names = {LeadStage.NEED: "салом / эҳтиёж", LeadStage.QUANTITY: "нарх айтилгандан кейин (неча киши)", LeadStage.NAME: "нарх айтилгандан кейин (исм)",
                  LeadStage.PHONE: "телефон сўралганда", LeadStage.ADDRESS: "тафсилот сўралганда", LeadStage.CONFIRM: "тасдиқда"}
         stuck = Counter(x.stage for x in cur if x.stage in names)
