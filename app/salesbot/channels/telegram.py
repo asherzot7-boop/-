@@ -93,6 +93,11 @@ def build_sales_router(agent: SalesAgent) -> Router:
             await message.bot.send_message(message.chat.id, reply.text, business_connection_id=message.business_connection_id)
         else:
             await message.answer(reply.text, reply_markup=_keyboard(reply, business))
+        if reply.voice:                                     # a voice note answered with a voice note
+            from aiogram.types import BufferedInputFile
+
+            kw = {"business_connection_id": message.business_connection_id} if business else {}
+            await message.bot.send_voice(message.chat.id, BufferedInputFile(reply.voice, filename="reply.ogg"), **kw)
 
     @router.message(F.text | F.contact | F.document | F.photo | F.voice | F.audio)
     async def on_message(message: Message) -> None:

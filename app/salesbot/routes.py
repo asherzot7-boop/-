@@ -55,6 +55,8 @@ async def _process_meta(agent, sender: meta.MetaSender, items: list[meta.Incomin
                 reply = await agent.handle_file(it.channel, it.sender, kind=it.attachment["kind"], data=data, too_big=too_big,
                                                 file_name=it.attachment.get("name"), mime=it.attachment.get("mime"), caption=it.text or None,
                                                 message_id=it.message_id, display_name=it.name, phone=it.phone)
+                if reply.voice and it.channel == "whatsapp":
+                    await sender.send_audio(it.sender, reply.voice)
             else:
                 reply = await agent.handle(it.channel, it.sender, it.text, display_name=it.name, phone=it.phone, message_id=it.message_id,
                                            source=it.source)
@@ -106,6 +108,36 @@ async def _twilio_params(request: Request) -> dict[str, str]:
     return params
 
 
+_AUDIO: dict[str, tuple[bytes, float]] = {}
+
+
+async def _play_url(request: Request, text: str, lang: str) -> str | None:
+    """Synthesize the phrase with Azure (MP3) and expose it for Twilio <Play> for 10 minutes."""
+    agent = getattr(request.app.state, "sales", None)
+    base = request.app.state.settings.sales_public_base_url
+    if agent is None or agent.tts is None or not base:
+        return None
+    audio = await agent.tts.synth(text, lang, "mp3")
+    if not audio:
+        return None
+    import secrets
+
+    now = time.monotonic()
+    for k in [k for k, (_, exp) in _AUDIO.items() if exp < now]:
+        _AUDIO.pop(k, None)
+    token = secrets.token_urlsafe(16)
+    _AUDIO[token] = (audio, now + 600)
+    return f"{base.rstrip('/')}/webhooks/twilio/audio/{token}.mp3"
+
+
+@router.get("/twilio/audio/{token}.mp3")
+async def twilio_audio(token: str) -> Response:
+    item = _AUDIO.get(token)
+    if item is None or item[1] < time.monotonic():
+        raise HTTPException(404, "expired")
+    return Response(item[0], media_type="audio/mpeg")
+
+
 def _xml(text: str) -> Response:
     return Response(text, media_type="application/xml")
 
@@ -118,7 +150,8 @@ async def twilio_voice(request: Request) -> Response:
     reply = await agent.handle("phone", caller, "", phone=caller, message_id=f"{p.get('CallSid')}:start")
     lg = reply.language
     text = reply.text or L.text(lg, "greet_voice", shop=request.app.state.settings.sales_shop_name)
-    return _xml(voice.gather_twiml(text, request.app.state.settings, "/webhooks/twilio/voice/gather", L.text(lg, "noinput_voice")))
+    play = await _play_url(request, text, lg)
+    return _xml(voice.gather_twiml(text, request.app.state.settings, "/webhooks/twilio/voice/gather", L.text(lg, "noinput_voice"), play))
 
 
 @router.post("/twilio/voice/gather")
@@ -137,8 +170,10 @@ async def twilio_gather(request: Request) -> Response:
     reply = await agent.handle("phone", caller, speech, phone=caller, message_id=f"{p.get('CallSid')}:{digest}")
     lg = reply.language
     if reply.done:
-        return _xml(voice.hangup_twiml(reply.text or L.text(lg, "handoff"), settings, L.text(lg, "bye_voice")))
-    return _xml(voice.gather_twiml(reply.text or L.text(lg, "noinput_voice"), settings, action, L.text(lg, "noinput_voice")))
+        final = reply.text or L.text(lg, "handoff")
+        return _xml(voice.hangup_twiml(final, settings, L.text(lg, "bye_voice"), await _play_url(request, final + " " + L.text(lg, "bye_voice"), lg)))
+    say = reply.text or L.text(lg, "noinput_voice")
+    return _xml(voice.gather_twiml(say, settings, action, L.text(lg, "noinput_voice"), await _play_url(request, say, lg)))
 
 
 # ------------------------------------------------------------------ site chat widget

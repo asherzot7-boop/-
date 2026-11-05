@@ -154,7 +154,7 @@ async def load_catalog(session: AsyncSession, path: str | None, include_books: b
 
 
 def _stems(text: str) -> set[str]:
-    words = re.findall(r"[a-z0-9']+", normalize(text).replace("ı", "i").replace("ş", "sh").replace("ç", "ch").replace("ğ", "g")
+    words = re.findall(r"[a-z0-9']+", normalize(text).replace("\u0307", "").replace("ı", "i").replace("ş", "sh").replace("ç", "ch").replace("ğ", "g")
                        .replace("ö", "o").replace("ü", "u"))
     return {w.replace("'", "")[:5] for w in words if len(w) >= 3}
 

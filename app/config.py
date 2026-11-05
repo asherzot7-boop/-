@@ -130,6 +130,18 @@ class Settings(BaseSettings):
     # Payme Merchant API (/webhooks/payme) and Click SHOP API (/webhooks/click/*): automatic payment confirmation
     payme_key: SecretStr | None = None
     click_secret_key: SecretStr | None = None
+    # AI for conversations: Claude when ANTHROPIC_API_KEY is set (preferred), else OpenAI, else rules
+    anthropic_api_key: SecretStr | None = None
+    sales_ai_model: str = "claude-haiku-5-5"
+    # Passport photos -> MRZ fields (sends the photo to the AI provider; off by default)
+    sales_passport_ocr: bool = False
+    # Voice replies: Azure Speech (Uzbek uz-UZ-MadinaNeural / uz-UZ-SardorNeural, Turkish, Russian)
+    azure_speech_key: SecretStr | None = None
+    azure_speech_region: str | None = None
+    sales_uz_voice: str | None = None
+    # Weekly report to directors: ISO weekday and local hour
+    sales_weekly_report_day: int = 1
+    sales_weekly_report_hour: int = 9
     # Knowledge base: curated answers (JSON) + answers managers gave with /answer
     sales_faq_path: str | None = "sales_faq.json"
     # Instagram comments: intent (reply to questions/prices only) | all | off
@@ -156,7 +168,8 @@ class Settings(BaseSettings):
         out = []
         for s in (self.bot_token, self.openai_api_key, self.api_token, self.sales_bot_token, self.meta_verify_token, self.meta_app_secret,
                   self.instagram_access_token, self.messenger_page_token, self.whatsapp_access_token, self.twilio_auth_token,
-                  self.sales_sheets_webhook_url, self.sales_files_key, self.sales_calendar_webhook_url, self.payme_key, self.click_secret_key):
+                  self.sales_sheets_webhook_url, self.sales_files_key, self.sales_calendar_webhook_url, self.payme_key, self.click_secret_key,
+                  self.anthropic_api_key, self.azure_speech_key):
             if s is not None and s.get_secret_value():
                 out.append(s.get_secret_value())
         return out

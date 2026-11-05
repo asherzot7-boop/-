@@ -211,6 +211,22 @@ class MetaSender:
                 "document": {"id": media_id, "filename": filename, "caption": caption[:1000]}}
         return await self._post(f"{base}/{phone_id}/messages", body, token, "document")
 
+    async def send_audio(self, recipient: str, data: bytes) -> bool:
+        """WhatsApp voice reply: upload OGG/Opus and send it as an audio message."""
+        token, phone_id = self._secret(self.s.whatsapp_access_token), self.s.whatsapp_phone_number_id
+        if not token or not phone_id:
+            return False
+        base = self.s.meta_graph_url.rstrip("/")
+        try:
+            up = await self._http().post(f"{base}/{phone_id}/media", headers={"Authorization": f"Bearer {token}"},
+                                         data={"messaging_product": "whatsapp", "type": "audio/ogg"}, files={"file": ("reply.ogg", data, "audio/ogg")})
+            media_id = up.json().get("id") if up.status_code < 400 else None
+        except Exception as exc:
+            log.warning("WhatsApp'га овоз юкланмади: %s", type(exc).__name__)
+            return False
+        return bool(media_id) and await self._post(f"{base}/{phone_id}/messages", {
+            "messaging_product": "whatsapp", "to": recipient, "type": "audio", "audio": {"id": media_id}}, token, "audio")
+
     async def send_template(self, recipient: str, name: str, lang: str) -> bool:
         """WhatsApp template message (the only way to write first after the 24-hour window)."""
         token, phone_id = self._secret(self.s.whatsapp_access_token), self.s.whatsapp_phone_number_id

@@ -65,8 +65,10 @@ async def build_container(settings: Settings) -> Container:
 
         outbound.register(("web",), WebSender())
         key = settings.openai_api_key.get_secret_value() if settings.llm_enabled else None
+        from app.salesbot.tts import build_tts
+
         sales = SalesAgent(sf, settings, model=build_sales_model(settings), outbound=outbound,
-                           transcriber=Transcriber(key, settings.sales_stt_model))
+                           transcriber=Transcriber(key, settings.sales_stt_model), tts=build_tts(settings))
     service = CommandService(sf, coordinator, settings, runtime=build_runtime(settings))
     service.sales = sales
     return Container(settings, engine, sf, coordinator, service, sales)
@@ -113,6 +115,13 @@ async def sales_reminder_loop(c: Container) -> None:
                 n = await c.sales.sla_check()
                 if n:
                     log.info("Жавобсиз қолган мурожаатлар раҳбарга юборилди: %s", n)
+            if enabled and await c.sales.weekly_report_due() and c.sales.notifier is not None:
+                from app.notify import director_ids
+
+                text = await c.sales.weekly_report()
+                async with c.session_factory() as s:
+                    for tid in await director_ids(s):
+                        await c.sales.notifier.send(tid, text)
             # privacy: delete expired client files even while automation is paused
             n = await c.sales.purge_files()
             if n:
@@ -253,9 +262,10 @@ async def seed(settings: Settings) -> None:
 
 def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser(prog="python -m app.main")
-    parser.add_argument("mode", nargs="?", default="run", choices=["run", "demo", "migrate", "seed", "sales", "backup"])
+    parser.add_argument("mode", nargs="?", default="run", choices=["run", "demo", "migrate", "seed", "sales", "backup", "eval"])
     parser.add_argument("--as-id", type=int, default=None, help="demo: Telegram ID (default: first director)")
     parser.add_argument("--to", default=None, help="backup: destination folder (default BACKUP_DIR)")
+    parser.add_argument("--cases", default="sales_eval_cases.json", help="eval: conversations to check")
     parser.add_argument("--channel", default="console", help="sales: channel name to simulate (instagram, whatsapp, telegram, phone)")
     a = parser.parse_args(argv)
 
@@ -266,6 +276,13 @@ def main(argv: list[str] | None = None) -> None:
         log.info("Миграциялар қўлланди")
     elif a.mode == "demo":
         asyncio.run(demo_console(settings, a.as_id or (settings.director_ids[0] if settings.director_ids else DEMO_DIRECTOR_ID)))
+    elif a.mode == "eval":
+        from app.salesbot.agent import build_sales_model
+        from app.salesbot.evaluation import report, run
+
+        results = asyncio.run(run(settings, a.cases, model=build_sales_model(settings)))
+        print(report(results))
+        raise SystemExit(0 if all(r.ok for r in results) else 1)
     elif a.mode == "backup":
         from app.backup import make_backup
 

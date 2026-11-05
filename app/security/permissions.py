@@ -28,6 +28,7 @@ COMMAND_ROLE: dict[str, Role] = {
     "lead": Role.VIEWER,
     "files": Role.VIEWER,
     "faq": Role.VIEWER,
+    "weekly": Role.VIEWER,
     "approve": Role.DIRECTOR,
     "pause": Role.DIRECTOR,
     "resume": Role.DIRECTOR,

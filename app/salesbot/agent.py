@@ -60,6 +60,7 @@ class AgentReply:
     lead_id: int | None = None
     language: str = "uz"
     won: bool = False  # this message confirmed the application
+    voice: bytes | None = None  # OGG/Opus voice note of the reply (client wrote by voice and TTS is configured)
 
 
 @dataclass
@@ -150,7 +151,8 @@ def extract(text: str, products: list[cat.Product], stage: LeadStage) -> Extract
     e.docs = bool(L.DOCS.search(norm) or L.DOCS.search(text))
 
     plain = text.strip()
-    if stage == LeadStage.NAME and not e.phone and not e.name:
+    looks_like_talk = "?" in plain or e.discount or e.expensive or e.price_question or e.docs or e.buy or e.operator or e.yes or e.no
+    if stage == LeadStage.NAME and not e.phone and not e.name and not looks_like_talk:
         name = _NAME_PREFIX.sub("", plain).strip(" .,!")
         if 1 < len(name) <= 60 and not any(ch.isdigit() for ch in name) and len(name.split()) <= 4:
             e.name = _title(name)
@@ -205,6 +207,53 @@ class OpenAISalesModel:
         return json.loads(resp.choices[0].message.content or "{}")
 
 
+AI_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "reply": {"type": "string"}, "product_id": {"type": "string"}, "quantity": {"type": "integer"},
+        "name": {"type": "string"}, "phone": {"type": "string"}, "address": {"type": "string"},
+        "pickup": {"type": "boolean"}, "confirm": {"type": "boolean"}, "decline": {"type": "boolean"},
+        "operator": {"type": "boolean"}, "discount": {"type": "boolean"},
+    },
+    "required": ["reply", "product_id", "quantity", "name", "phone", "address", "pickup", "confirm", "decline", "operator", "discount"],
+    "additionalProperties": False,
+}
+
+
+class AnthropicSalesModel:
+    """Claude (default claude-haiku-5-5) with structured output: the reply is guaranteed to be JSON of AI_SCHEMA.
+    Empty strings / 0 mean "not given"; merge_ai validates every field anyway."""
+
+    def __init__(self, api_key: str, model: str = "claude-haiku-5-5", timeout: float = 30.0) -> None:
+        import anthropic
+
+        self._client = anthropic.AsyncAnthropic(api_key=api_key, timeout=timeout, max_retries=1)
+        self.model = model
+
+    async def analyse(self, *, language, shop, products, lead, history, message) -> dict:
+        system = SYSTEM_PROMPT.format(
+            shop=shop, language_name=LANGUAGE_NAMES.get(language, language),
+            catalog="\n".join(f"{p.id} | {p.title(language)} | {cat.price_text(p, language)} | {p.desc(language)} | hujjatlar: {p.docs(language) or '-'}"
+                              for p in products) or "(bo'sh)",
+            lead=json.dumps(lead, ensure_ascii=False),
+        ) + "\nBo'sh maydonlar uchun \"\" yoki 0 yoz."
+        msgs: list[dict] = []
+        for m in [*history[-12:], {"role": "user", "content": message}]:   # alternate roles, start with the user
+            if not msgs and m["role"] != "user":
+                continue
+            if msgs and msgs[-1]["role"] == m["role"]:
+                msgs[-1] = {"role": m["role"], "content": msgs[-1]["content"] + "\n" + m["content"]}
+            else:
+                msgs.append(dict(m))
+        resp = await self._client.messages.create(
+            model=self.model, max_tokens=2048, system=system, messages=msgs,
+            output_config={"effort": "low", "format": {"type": "json_schema", "schema": AI_SCHEMA}},
+        )
+        if resp.stop_reason == "refusal":
+            raise RuntimeError("refusal")
+        return json.loads(next(b.text for b in resp.content if b.type == "text"))
+
+
 def merge_ai(e: Extracted, data: dict, products: list[cat.Product]) -> Extracted:
     """Take only validated fields from the model's JSON."""
     if not isinstance(data, dict):
@@ -236,13 +285,14 @@ def merge_ai(e: Extracted, data: dict, products: list[cat.Product]) -> Extracted
 # ----------------------------------------------------------------- the agent
 class SalesAgent:
     def __init__(self, session_factory: async_sessionmaker[AsyncSession], settings, notifier=None, model: SalesModel | None = None,
-                 outbound=None, transcriber: media.Transcriber | None = None) -> None:
+                 outbound=None, transcriber: media.Transcriber | None = None, tts=None) -> None:
         self.sf = session_factory
         self.settings = settings
         self.notifier = notifier
         self.model = model
         self.outbound = outbound  # Outbound: messages the business starts (manager replies, reminders)
         self.transcriber = transcriber
+        self.tts = tts
         self.http = None  # httpx.AsyncClient for the Sheets webhook, created on first use
         self._free_slots_cache: list = []
 
@@ -324,6 +374,8 @@ class SalesAgent:
             if text:
                 reply = await self.handle(channel, external_id, text, display_name=display_name, phone=phone, message_id=message_id, extra=extra)
                 await self._save_file(channel, external_id, kind, data, name, mime, caption, message_id, transcript=text)
+                if reply.text and self.tts is not None:
+                    reply.voice = await self.tts.synth(reply.text, reply.language, "ogg")   # answer a voice note with a voice note
                 return reply
         too_big = too_big or (data is not None and len(data) > self.settings.sales_max_file_mb * 1024 * 1024)
         saved = await self._save_file(channel, external_id, kind, None if too_big else data, name, mime, caption, message_id,
@@ -350,6 +402,10 @@ class SalesAgent:
             checklist = await self._update_checklist(lead.id, row.id, name, caption or "")
             if checklist:
                 text += "\n" + checklist
+            if data and (mime or "").startswith("image/") and self.settings.sales_passport_ocr:
+                note = await self._passport(lead.id, data, mime)
+                if note:
+                    text += "\n" + note
             if caption and caption.strip() and lead.stage not in (LeadStage.WON, LeadStage.HANDOFF):
                 # a caption is usually a document title: it may carry funnel data, but never switches the language
                 follow = await self.handle(channel, external_id, caption, message_id=f"{message_id}:caption" if message_id else None,
@@ -747,6 +803,118 @@ class SalesAgent:
             await self._audit("file.purged", None, {"count": removed, "older_than_days": self.settings.sales_file_retention_days})
         return removed
 
+    # ------------------------------------------------------------ passport OCR
+    async def _passport(self, lead_id: int, data: bytes, mime: str) -> str | None:
+        from datetime import date
+
+        from app.salesbot import passport
+
+        raw = await passport.read_mrz(data, mime, self.settings)
+        info = passport.parse_mrz(raw or "")
+        if info is None:
+            return None
+        async with self.sf() as s:
+            lead = await s.get(Lead, lead_id)
+            stored = {k: info[k] for k in ("surname", "given", "nationality", "birth", "expiry", "country")}
+            stored["number_tail"] = info["number"][-3:]               # never keep the full number in the database
+            lead.extra = {**(lead.extra or {}), "passport": stored}
+            if not lead.name:
+                lead.name = f"{info['given'].split(' ')[0]} {info['surname']}".strip()
+            lg = lead.language
+            await s.commit()
+        try:
+            left = (date.fromisoformat(info["expiry"]) - date.today()).days
+        except ValueError:
+            return None
+        if left < 183:
+            return L.text(lg, "passport_expiring", date=info["expiry"])
+        return L.text(lg, "passport_ok", name=f"{info['given']} {info['surname']}".strip(), date=info["expiry"])
+
+    # ------------------------------------------------------------ weekly report
+    async def weekly_report(self, now=None) -> str:
+        """Last 7 days vs the 7 before, where clients stop, and concrete suggestions. Rule-based: no invented numbers."""
+        from collections import Counter
+        from zoneinfo import ZoneInfo
+
+        now = now or utcnow()
+        a, b = now - timedelta(days=7), now - timedelta(days=14)
+        async with self.sf() as s:
+            cur = list(await s.scalars(select(Lead).where(Lead.created_at >= a)))
+            prev = list(await s.scalars(select(Lead).where(Lead.created_at >= b, Lead.created_at < a)))
+            products = {p.id: p for p in await cat.load_catalog(s, self.settings.sales_catalog_path, self.settings.sales_catalog_from_books)}
+            open_q = [x for x in await s.scalars(select(Lead)) if (x.extra or {}).get("open_question")]
+        won = [x for x in cur if x.stage == LeadStage.WON]
+        pwon = [x for x in prev if x.stage == LeadStage.WON]
+        conv = round(100 * len(won) / len(cur)) if cur else 0
+
+        def money(rows, attr):
+            tot = Counter()
+            for x in rows:
+                v = getattr(x, attr) if attr != "paid" else (x.prepayment_due if x.prepaid_at else 0)
+                if v:
+                    tot[x.currency or (products[x.product_id].currency if x.product_id in products else "so'm")] += v
+            return " + ".join(cat.money(v, c, "uzc") for c, v in tot.items()) or "0"
+
+        def delta(c, p):
+            return f"{c} (ўтган ҳафта {p}{', ' + ('+' if c >= p else '') + str(round(100 * (c - p) / p)) + '%' if p else ''})"
+
+        order = [LeadStage.NEED, LeadStage.QUANTITY, LeadStage.NAME, LeadStage.PHONE, LeadStage.ADDRESS, LeadStage.CONFIRM, LeadStage.WON]
+        names = {LeadStage.NEED: "салом / эҳтиёж", LeadStage.QUANTITY: "нарх айтилгандан кейин (неча киши)", LeadStage.NAME: "нарх айтилгандан кейин (исм)",
+                 LeadStage.PHONE: "телефон сўралганда", LeadStage.ADDRESS: "тафсилот сўралганда", LeadStage.CONFIRM: "тасдиқда"}
+        stuck = Counter(x.stage for x in cur if x.stage in names)
+        by_ch = Counter(CHANNEL_NAMES.get(x.channel, x.channel) for x in won)
+        by_src = Counter(((x.extra or {}).get("source") or {}).get("name") or ((x.extra or {}).get("source") or {}).get("id") or "органик" for x in won)
+        ratings = [x.extra["rating"] for x in cur if (x.extra or {}).get("rating")]
+        waiting_pay = [x for x in won if x.prepayment_due and not x.prepaid_at]
+        local = lambda d: d.replace(tzinfo=ZoneInfo("UTC")).astimezone(self.settings.tz).strftime("%d.%m")  # noqa: E731
+        lines = [f"📊 Ҳафталик ҳисобот ({local(a)}–{local(now)})", "",
+                 f"Мижозлар: {delta(len(cur), len(prev))}", f"Аризалар: {delta(len(won), len(pwon))}, конверсия {conv}%",
+                 f"Аризалар суммаси: {money(won, 'total')}", f"Олдиндан тўлов келди: {money(won, 'paid')} · кутилмоқда: {len(waiting_pay)} та"]
+        if by_ch:
+            ch, n = by_ch.most_common(1)[0]
+            lines.append(f"Энг кўп ариза келган канал: {ch} ({n} та)")
+        if by_src and by_src.most_common(1)[0][0] != "органик":
+            src, n = by_src.most_common(1)[0]
+            lines.append(f"Энг яхши реклама/манба: {src} ({n} та ариза)")
+        if stuck:
+            st, n = stuck.most_common(1)[0]
+            lines.append(f"Мижозлар энг кўп тўхтаган жой: {names[st]} ({n} та)")
+        lines.append(f"Жавобсиз саволлар: {len(open_q)} та" + (f" · ўртача баҳо: {round(sum(ratings) / len(ratings), 1)}/5" if ratings else ""))
+        tips = []
+        if stuck and stuck.most_common(1)[0][0] in (LeadStage.QUANTITY, LeadStage.NAME):
+            tips.append("Кўп мижоз нархни билгач тўхтаяпти: эртасига эслатма юборилади, лекин менежер ҳам қўнғироқ қилиб кўрсин.")
+        if stuck and stuck.most_common(1)[0][0] == LeadStage.PHONE:
+            tips.append("Телефон қадамида тўхташ кўп: Telegram'да «Рақамни юбориш» тугмаси бор, WhatsApp'да рақам сўралмайди — шу каналларни реклама қилинг.")
+        if len(open_q) >= 3:
+            tips.append(f"{len(open_q)} та савол жавобсиз: /answer билан жавоб беринг — агент уларни ўрганади ва кейин ўзи жавоб беради.")
+        if waiting_pay:
+            tips.append(f"{len(waiting_pay)} та ариза олдиндан тўловни кутмоқда: мижозларга қўнғироқ қилинг (/leads).")
+        if ratings and sum(ratings) / len(ratings) < 4:
+            tips.append("Ўртача баҳо 4 дан паст: паст баҳо берган мижозлар билан гаплашинг.")
+        if len(cur) < len(prev):
+            tips.append("Мижозлар сони камайди: реклама ва Instagram постларини текширинг (панелдаги «Реклама ва манбалар»).")
+        if tips:
+            lines += ["", "Тавсиялар:"] + [f"• {t}" for t in tips]
+        return "\n".join(lines)
+
+    async def weekly_report_due(self, now=None) -> bool:
+        """True once per ISO week, on the configured weekday after the configured local hour."""
+        from zoneinfo import ZoneInfo
+
+        from app.services import settings_store
+
+        now = now or utcnow()
+        local = now.replace(tzinfo=ZoneInfo("UTC")).astimezone(self.settings.tz)
+        if local.isoweekday() != self.settings.sales_weekly_report_day or local.hour < self.settings.sales_weekly_report_hour:
+            return False
+        week = f"{local.isocalendar().year}-W{local.isocalendar().week}"
+        async with self.sf() as s:
+            if await settings_store.get_setting(s, "sales_weekly_report", None) == week:
+                return False
+            await settings_store.set_setting(s, "sales_weekly_report", week)
+            await s.commit()
+        return True
+
     # ------------------------------------------------------------ contract and invoice
     async def build_documents(self, lead_id: int) -> dict[str, bytes]:
         from app.salesbot import documents
@@ -1063,6 +1231,8 @@ class SalesAgent:
         if e.discount and not lead.discount_requested:
             lead.discount_requested = True
             notices.append(self._manager_card(lead, "💸 Мижоз чегирма сўради (қарор — менежерда)"))
+        if (e.discount or e.expensive) and lead.quantity:
+            prefix = (prefix or "") + L.text(lg, "discount_note") + "\n\n"   # quantity known: the objection text would ask it again
 
         if lead.stage == LeadStage.CONFIRM:
             if e.yes and not e.no and self._complete(lead):
@@ -1279,6 +1449,8 @@ def _lead_state(lead: Lead) -> dict:
 
 
 def build_sales_model(settings) -> SalesModel | None:
+    if settings.anthropic_api_key is not None and settings.anthropic_api_key.get_secret_value():
+        return AnthropicSalesModel(settings.anthropic_api_key.get_secret_value(), settings.sales_ai_model)
     if not settings.llm_enabled:
         return None
     return OpenAISalesModel(settings.openai_api_key.get_secret_value(), settings.openai_model, min(settings.openai_timeout, 30.0))

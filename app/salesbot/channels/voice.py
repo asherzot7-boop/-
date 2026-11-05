@@ -37,15 +37,20 @@ def _say(text: str, settings) -> str:
     return f"<Say language={quoteattr(settings.sales_voice_tts_language)}{voice}>{escape(speakable(text))}</Say>"
 
 
-def gather_twiml(text: str, settings, action: str, noinput: str) -> str:
+def _speak(text: str, settings, play_url: str | None) -> str:
+    """Azure audio (real Uzbek voice) when available, otherwise Twilio's own <Say>."""
+    return f"<Play>{escape(play_url)}</Play>" if play_url else _say(text, settings)
+
+
+def gather_twiml(text: str, settings, action: str, noinput: str, play_url: str | None = None) -> str:
     return (
         '<?xml version="1.0" encoding="UTF-8"?><Response>'
         f'<Gather input="speech" action={quoteattr(action)} method="POST" language={quoteattr(settings.sales_voice_stt_language)} '
         'speechTimeout="auto" timeout="6">'
-        f"{_say(text, settings)}</Gather>"
+        f"{_speak(text, settings, play_url)}</Gather>"
         f"{_say(noinput, settings)}<Redirect method=\"POST\">{escape(action)}?silent=1</Redirect></Response>"
     )
 
 
-def hangup_twiml(text: str, settings, bye: str) -> str:
-    return f'<?xml version="1.0" encoding="UTF-8"?><Response>{_say(text, settings)}{_say(bye, settings)}<Hangup/></Response>'
+def hangup_twiml(text: str, settings, bye: str, play_url: str | None = None) -> str:
+    return f'<?xml version="1.0" encoding="UTF-8"?><Response>{_speak(text + " " + bye, settings, play_url)}<Hangup/></Response>'

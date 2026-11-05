@@ -17,8 +17,10 @@ _APOS = "'ʻʼ‘’`"
 
 _WORDS = {
     "uzc": {"салом", "ассалому", "алайкум", "нарх", "нархи", "қанча", "керак", "борми", "бор", "рахмат", "раҳмат", "китоб", "олмоқчиман", "менга", "ҳа", "йўқ", "яхши", "неча"},
-    "ru": {"здравствуйте", "привет", "сколько", "стоит", "хочу", "цена", "есть", "спасибо", "мне", "нужно", "нужна", "купить", "да", "нет", "добрый", "день", "можно"},
-    "tr": {"merhaba", "selam", "fiyat", "fiyatı", "kaç", "kadar", "istiyorum", "var", "mı", "mi", "teşekkür", "teşekkürler", "evet", "hayır", "lütfen", "ne", "almak", "kitap", "tane", "adet", "günaydın"},
+    "ru": {"здравствуйте", "привет", "сколько", "стоит", "хочу", "цена", "есть", "спасибо", "мне", "нужно", "нужна", "купить", "да", "нет", "добрый", "день", "можно",
+           "как", "где", "когда", "что", "отправить", "документы", "паспорт", "проверка", "вы", "вас", "даёте", "гарантию", "заявка", "меня", "зовут"},
+    "tr": {"merhaba", "selam", "fiyat", "fiyatı", "kaç", "kadar", "istiyorum", "var", "mı", "mi", "teşekkür", "teşekkürler", "evet", "hayır", "lütfen", "ne", "almak", "kitap", "tane", "adet", "günaydın",
+           "veriyor", "musunuz", "misiniz", "nedir", "gerekli", "hangi", "nasıl", "nasil", "garanti", "belge", "belgeler", "pasaport", "sorgulama", "başvuru", "yardım"},
     "uz": {"salom", "assalomu", "alaykum", "narx", "narxi", "qancha", "kerak", "bormi", "rahmat", "olmoqchiman", "menga", "ha", "yoq", "yo'q", "yaxshi", "nechta", "kitob", "buyurtma", "qanday"},
 }
 
@@ -69,8 +71,8 @@ _CYR2LAT = {
 def to_cyrillic(text: str) -> str:
     """Uzbek Latin -> Cyrillic. Text inside {braces} or URLs is left as is."""
     out: list[str] = []
-    for part in re.split(r"(\{[^}]*\}|https?://\S+|@\w+)", text):
-        if not part or part.startswith(("{", "http", "@")):
+    for part in re.split(r"(\{[^}]*\}|https?://\S+|@\w+|\b[A-Za-z]*[a-z][A-Z][A-Za-z]*\b|\b[A-Z]{2,}\b)", text):
+        if not part or part.startswith(("{", "http", "@")) or re.fullmatch(r"[A-Za-z]*[a-z][A-Z][A-Za-z]*|[A-Z]{2,}", part):
             out.append(part)
             continue
         out.append(_word_translit(part))
@@ -176,6 +178,9 @@ TEXTS: dict[str, dict[str, str]] = {
         "paid": "To'lovingiz qabul qilindi ✅ Ishni boshladik, natija haqida shu yerda xabar beramiz.",
         "reminder": "Assalomu alaykum{name}! Arizangizni tugatamizmi? {question}",
         "from_manager": "👤 Menejer: {text}",
+        "discount_note": "Chegirma bo'yicha qarorni menejerimiz qabul qiladi — so'rovingizni yetkazdim.",
+        "passport_ok": "Pasport o'qildi: {name}, amal qilish muddati {date}.",
+        "passport_expiring": "Diqqat: pasportingiz muddati {date} da tugaydi (6 oydan kam qoldi). Konsultantimiz bu holatni alohida ko'rib chiqadi.",
         "slots": "Konsultatsiya uchun qulay vaqtni tanlang (raqamini yozing):\n{slots}\nBoshqa vaqt kerak bo'lsa, o'zingiz yozing.",
         "booking_reminder": "Eslatma: konsultatsiyangiz bugun soat {time} da. Kutib qolamiz!",
         "weekdays": "Dushanba|Seshanba|Chorshanba|Payshanba|Juma|Shanba|Yakshanba",
@@ -241,6 +246,9 @@ TEXTS: dict[str, dict[str, str]] = {
         "paid": "Ödemeniz alındı ✅ İşleme başladık, sonucu buradan bildireceğiz.",
         "reminder": "Merhaba{name}! Başvurunuzu tamamlayalım mı? {question}",
         "from_manager": "👤 Yönetici: {text}",
+        "discount_note": "İndirim kararını yöneticimiz verir — talebinizi ilettim.",
+        "passport_ok": "Pasaport okundu: {name}, geçerlilik {date}.",
+        "passport_expiring": "Dikkat: pasaportunuzun süresi {date} tarihinde doluyor (6 aydan az kaldı). Danışmanımız bu durumu ayrıca inceleyecek.",
         "slots": "Görüşme için uygun saati seçin (numarasını yazın):\n{slots}\nBaşka bir saat isterseniz yazın.",
         "booking_reminder": "Hatırlatma: görüşmeniz bugün saat {time}'de. Bekliyoruz!",
         "weekdays": "Pazartesi|Salı|Çarşamba|Perşembe|Cuma|Cumartesi|Pazar",
@@ -306,6 +314,9 @@ TEXTS: dict[str, dict[str, str]] = {
         "paid": "Оплата получена ✅ Мы начали работу и сообщим результат здесь.",
         "reminder": "Здравствуйте{name}! Завершим вашу заявку? {question}",
         "from_manager": "👤 Менеджер: {text}",
+        "discount_note": "Решение о скидке принимает менеджер — я передал ваш запрос.",
+        "passport_ok": "Паспорт распознан: {name}, действителен до {date}.",
+        "passport_expiring": "Внимание: срок действия паспорта истекает {date} (осталось меньше 6 месяцев). Консультант рассмотрит это отдельно.",
         "slots": "Выберите удобное время консультации (напишите номер):\n{slots}\nЕсли нужно другое время, напишите его.",
         "booking_reminder": "Напоминание: ваша консультация сегодня в {time}. Ждём вас!",
         "weekdays": "Понедельник|Вторник|Среда|Четверг|Пятница|Суббота|Воскресенье",

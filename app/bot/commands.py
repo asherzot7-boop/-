@@ -55,7 +55,7 @@ HELP = """Nashriyot AI — буйруқлар
 /pause · /resume — автоматик жараёнлар (раҳбар)
 /leads — сотув агенти лидлари (Instagram, WhatsApp, Telegram, телефон) · /lead <id> — ёзишма · /lead bot <id> — ботга қайтариш
 /reply <id> <матн> — мижозга жавоб (у ёзган каналга) · /paid <id> — олдиндан тўлов келди · /files <id> — мижоз юборган ҳужжатлар
-/status <id> <1-5> [изоҳ] — ариза ҳолати (мижозга хабар боради) · /answer <id> <жавоб> — савол-жавоб (базага қўшилади) · /faq — ўрганилган жавоблар · /result <id> ban|ok — паспорт текшируви натижаси ва кейинги таклиф
+/weekly — ҳафталик ҳисобот · /status <id> <1-5> [изоҳ] — ариза ҳолати (мижозга хабар боради) · /answer <id> <жавоб> — савол-жавоб (базага қўшилади) · /faq — ўрганилган жавоблар · /result <id> ban|ok — паспорт текшируви натижаси ва кейинги таклиф
 
 Оддий тилда ҳам ёзишингиз мумкин, масалан:
 «Янги дарслик лойиҳасини оч, биринчи бобни муҳаррирга бер, кейин методистга текширтир ва натижани менга юбор»"""
@@ -484,6 +484,12 @@ class CommandService:
         if ok:
             await audit.log_action(s, "lead.result", user, "lead", lead_id, {"outcome": args[1]})
         return Reply(info)
+
+    async def cmd_weekly(self, s: AsyncSession, user, args, raw, key) -> Reply:
+        sales = getattr(self, "sales", None)
+        if sales is None:
+            return Reply("Сотув агенти ўчирилган.")
+        return Reply(await sales.weekly_report())
 
     async def cmd_status(self, s: AsyncSession, user, args, raw, key) -> Reply:
         sales = getattr(self, "sales", None)
