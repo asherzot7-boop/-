@@ -156,7 +156,7 @@ async def director(session: AsyncSession, settings, days: int = 30, now: datetim
         for s in FUNNEL[: (pos or 0) + 1]:
             reached[s] += 1
     upsell = [x for x in leads if (x.extra or {}).get("from_lead")]
-    money = lambda d: [{"currency": c, "amount": v, "text": cat.money(v, c, "uzc")} for c, v in sorted(d.items()) if v]  # noqa: E731
+    money = lambda d: [{"currency": c, "amount": v, "text": cat.money(v, c, "uzc")} for c, v in sorted(d.items()) if v]
     return {
         "days": days,
         "totals": {"leads": len(leads), "won": len(won), "conversion": round(100 * len(won) / len(leads)) if leads else 0,
@@ -223,7 +223,7 @@ async def manager(session: AsyncSession, settings) -> dict:
     files: dict[int, list] = defaultdict(list)
     for f in await session.scalars(select(LeadFile).where(LeadFile.lead_id.in_([x.id for x in leads] or [0])).order_by(LeadFile.id)):
         files[f.lead_id].append({"id": f.id, "name": f.file_name, "kind": f.kind, "has_file": bool(f.path), "transcript": f.transcript})
-    card = lambda x: _card(x, products, files)  # noqa: E731
+    card = lambda x: _card(x, products, files)
     return {
         "payments": [card(x) for x in leads if x.stage == LeadStage.WON and x.prepayment_due and not x.prepaid_at],
         "results": [card(x) for x in leads if x.stage == LeadStage.WON and x.product_id in products

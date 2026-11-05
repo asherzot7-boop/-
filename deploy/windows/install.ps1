@@ -49,6 +49,11 @@ if (-not (Test-Path "$Root\.env")) {
     Copy-Item "$Root\.env.example" "$Root\.env"
     # Noutbukda API faqat shu kompyuterga ochiq; internetdan faqat Cloudflare Tunnel orqali.
     Add-Content "$Root\.env" "`nAPI_HOST=127.0.0.1"
+    # Panel paroli: tasodifiy API_TOKEN
+    $tok = -join ((48..57) + (97..122) | Get-Random -Count 32 | ForEach-Object { [char]$_ })
+    $lines = (Get-Content "$Root\.env" -Encoding UTF8) -replace '^API_TOKEN=$', "API_TOKEN=$tok"
+    [IO.File]::WriteAllLines("$Root\.env", $lines, (New-Object System.Text.UTF8Encoding($false)))
+    Write-Host "Panel paroli (API_TOKEN): $tok" -ForegroundColor Green
     Write-Host ".env yaratildi. Hozir Bloknot ochiladi: SALES_BOT_TOKEN, SALES_MANAGER_IDS va boshqalarni to'ldiring, saqlang va yoping."
     Start-Process notepad.exe "$Root\.env" -Wait
 } else {
