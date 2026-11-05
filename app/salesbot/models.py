@@ -4,7 +4,7 @@ from __future__ import annotations
 import enum
 from datetime import datetime
 
-from sqlalchemy import BigInteger, Boolean, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint
+from sqlalchemy import JSON, BigInteger, Boolean, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database.models import Base, TimestampMixin, _enum, utcnow
@@ -48,8 +48,17 @@ class Lead(TimestampMixin, Base):
     order_id: Mapped[int | None] = mapped_column(ForeignKey("orders.id"))
     notes: Mapped[str | None] = mapped_column(Text)
     last_message_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, nullable=False)
+    # full version: payments, reminders, channel data (e.g. Telegram business_connection_id)
+    prepayment_due: Mapped[int | None] = mapped_column(BigInteger)  # amount in the product currency
+    currency: Mapped[str | None] = mapped_column(String(8))
+    payment_link: Mapped[str | None] = mapped_column(String(500))
+    prepaid_at: Mapped[datetime | None] = mapped_column(DateTime)
+    reminder_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    last_reminder_at: Mapped[datetime | None] = mapped_column(DateTime)
+    extra: Mapped[dict | None] = mapped_column(JSON)
 
     messages: Mapped[list[LeadMessage]] = relationship(back_populates="lead", order_by="LeadMessage.id")
+    files: Mapped[list[LeadFile]] = relationship(back_populates="lead", order_by="LeadFile.id")
 
     @property
     def total(self) -> int | None:
@@ -69,3 +78,23 @@ class LeadMessage(TimestampMixin, Base):
     external_message_id: Mapped[str | None] = mapped_column(String(200))  # dedup of webhook retries
 
     lead: Mapped[Lead] = relationship(back_populates="messages")
+
+
+class LeadFile(TimestampMixin, Base):
+    """A document, photo or voice message a client sent. The bytes are kept on disk under SALES_FILES_DIR."""
+
+    __tablename__ = "lead_files"
+    __table_args__ = (UniqueConstraint("channel", "external_message_id", name="uq_lead_file_external"),)
+
+    lead_id: Mapped[int] = mapped_column(ForeignKey("leads.id"), nullable=False, index=True)
+    channel: Mapped[str] = mapped_column(String(20), nullable=False)
+    kind: Mapped[str] = mapped_column(String(10), nullable=False)  # document / photo / audio
+    file_name: Mapped[str] = mapped_column(String(200), nullable=False)
+    mime: Mapped[str | None] = mapped_column(String(100))
+    size: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    path: Mapped[str | None] = mapped_column(String(500))  # None -> download failed, only the reference is kept
+    caption: Mapped[str | None] = mapped_column(Text)
+    transcript: Mapped[str | None] = mapped_column(Text)  # voice messages
+    external_message_id: Mapped[str | None] = mapped_column(String(200))
+
+    lead: Mapped[Lead] = relationship(back_populates="files")

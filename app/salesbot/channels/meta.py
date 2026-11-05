@@ -22,6 +22,12 @@ class Incoming:
     message_id: str | None
     name: str | None = None
     phone: str | None = None
+    # file: {"kind": document|photo|audio, "url": ... (Instagram/Messenger) or "media_id": ... (WhatsApp), "name", "mime"}
+    attachment: dict | None = None
+
+
+_IG_KIND = {"image": "photo", "file": "document", "audio": "audio", "video": "document"}
+_WA_KIND = {"image": "photo", "document": "document", "audio": "audio", "video": "document"}
 
 
 def verify_signature(app_secret: str, body: bytes, header: str | None) -> bool:
@@ -40,11 +46,17 @@ def parse(payload: dict) -> list[Incoming]:
             channel = "instagram" if obj == "instagram" else "messenger"
             for ev in entry.get("messaging") or []:
                 msg = ev.get("message") or {}
-                if msg.get("is_echo") or not msg.get("text"):
-                    continue
                 sender = (ev.get("sender") or {}).get("id")
-                if sender:
+                if msg.get("is_echo") or not sender:
+                    continue
+                if msg.get("text"):
                     out.append(Incoming(channel, str(sender), str(msg["text"]), msg.get("mid")))
+                for i, att in enumerate(msg.get("attachments") or []):
+                    kind = _IG_KIND.get(att.get("type"))
+                    url = (att.get("payload") or {}).get("url")
+                    if kind and url:
+                        mid = f"{msg.get('mid')}:{i}" if msg.get("mid") else None
+                        out.append(Incoming(channel, str(sender), "", mid, attachment={"kind": kind, "url": url, "name": None, "mime": None}))
         elif obj == "whatsapp_business_account":
             for change in entry.get("changes") or []:
                 value = change.get("value") or {}
@@ -57,6 +69,13 @@ def parse(payload: dict) -> list[Incoming]:
                     elif msg.get("type") == "interactive":
                         inter = msg.get("interactive") or {}
                         body = (inter.get("button_reply") or inter.get("list_reply") or {}).get("title")
+                    elif msg.get("type") in _WA_KIND and msg.get("from"):
+                        m = msg.get(msg["type"]) or {}
+                        if m.get("id"):
+                            out.append(Incoming("whatsapp", str(msg["from"]), m.get("caption") or "", msg.get("id"), names.get(msg["from"]),
+                                                "+" + str(msg["from"]), attachment={"kind": _WA_KIND[msg["type"]], "media_id": m["id"],
+                                                                                   "name": m.get("filename"), "mime": m.get("mime_type")}))
+                        continue
                     else:
                         body = None
                     sender = msg.get("from")
@@ -82,6 +101,37 @@ class MetaSender:
     @staticmethod
     def _secret(v) -> str | None:
         return v.get_secret_value() if v is not None and v.get_secret_value() else None
+
+    async def download(self, item: Incoming, max_bytes: int) -> tuple[bytes | None, bool]:
+        """(bytes, too_big). WhatsApp media needs two authorised calls; Instagram gives a direct URL."""
+        att = item.attachment or {}
+        try:
+            if att.get("media_id"):
+                token = self._secret(self.s.whatsapp_access_token)
+                if not token:
+                    return None, False
+                headers = {"Authorization": f"Bearer {token}"}
+                meta = await self._http().get(f"{self.s.meta_graph_url.rstrip('/')}/{att['media_id']}", headers=headers)
+                info = meta.json() if meta.status_code < 400 else {}
+                if int(info.get("file_size") or 0) > max_bytes:
+                    return None, True
+                if not info.get("url"):
+                    return None, False
+                resp = await self._http().get(info["url"], headers=headers)
+            elif att.get("url"):
+                resp = await self._http().get(att["url"])
+            else:
+                return None, False
+        except Exception as exc:
+            log.warning("Meta файли юклаб олинмади: %s", type(exc).__name__)
+            return None, False
+        if resp.status_code >= 400:
+            return None, False
+        if len(resp.content) > max_bytes:
+            return None, True
+        if not att.get("mime"):
+            att["mime"] = resp.headers.get("content-type")
+        return resp.content, False
 
     async def send(self, channel: str, recipient: str, text: str) -> bool:
         base = self.s.meta_graph_url.rstrip("/")

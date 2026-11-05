@@ -76,6 +76,29 @@ async def list_leads(request: Request, limit: int = 50) -> list[dict]:
                  "last_message_at": x.last_message_at.isoformat()} for x in rows]
 
 
+@api.get("/leads.csv")
+async def leads_csv(request: Request):
+    """All leads as CSV (Excel / Google Sheets import)."""
+    import csv
+    import io
+
+    from fastapi.responses import Response
+
+    from app.salesbot.models import Lead
+
+    buf = io.StringIO()
+    w = csv.writer(buf)
+    w.writerow(["id", "created_at", "channel", "language", "stage", "name", "phone", "service", "quantity", "total", "currency",
+                "prepayment", "paid_at", "details"])
+    async with request.app.state.session_factory() as s:
+        for x in await s.scalars(select(Lead).order_by(Lead.id)):
+            w.writerow([x.id, x.created_at.isoformat(timespec="seconds"), x.channel, x.language, x.stage.value, x.name or "", x.phone or "",
+                        x.product_name or "", x.quantity or "", x.total or "", x.currency or "", x.prepayment_due or "",
+                        x.prepaid_at.isoformat(timespec="seconds") if x.prepaid_at else "", x.address or ""])
+    return Response("\ufeff" + buf.getvalue(), media_type="text/csv; charset=utf-8",
+                    headers={"Content-Disposition": "attachment; filename=leads.csv"})
+
+
 def create_api(settings, session_factory, sales=None, meta_sender=None) -> FastAPI:
     from app.salesbot.channels.meta import MetaSender
     from app.salesbot.routes import router as sales_router

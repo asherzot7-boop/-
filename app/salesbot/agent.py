@@ -16,6 +16,7 @@ import json
 import logging
 import re
 from dataclasses import dataclass, field
+from datetime import timedelta
 from typing import Protocol
 
 from sqlalchemy import select
@@ -25,7 +26,8 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from app.database.models import Book, utcnow
 from app.salesbot import catalog as cat
 from app.salesbot import lang as L
-from app.salesbot.models import OPEN_STAGES, Lead, LeadMessage, LeadStage
+from app.salesbot import media, payments
+from app.salesbot.models import OPEN_STAGES, Lead, LeadFile, LeadMessage, LeadStage
 
 log = logging.getLogger(__name__)
 
@@ -55,6 +57,7 @@ class AgentReply:
     done: bool = False  # order accepted or handed off (voice: end the call)
     lead_id: int | None = None
     language: str = "uz"
+    won: bool = False  # this message confirmed the application
 
 
 @dataclass
@@ -230,15 +233,19 @@ def merge_ai(e: Extracted, data: dict, products: list[cat.Product]) -> Extracted
 
 # ----------------------------------------------------------------- the agent
 class SalesAgent:
-    def __init__(self, session_factory: async_sessionmaker[AsyncSession], settings, notifier=None, model: SalesModel | None = None) -> None:
+    def __init__(self, session_factory: async_sessionmaker[AsyncSession], settings, notifier=None, model: SalesModel | None = None,
+                 outbound=None, transcriber: media.Transcriber | None = None) -> None:
         self.sf = session_factory
         self.settings = settings
         self.notifier = notifier
         self.model = model
+        self.outbound = outbound  # Outbound: messages the business starts (manager replies, reminders)
+        self.transcriber = transcriber
+        self.http = None  # httpx.AsyncClient for the Sheets webhook, created on first use
 
     # ------------------------------------------------------------ public
     async def handle(self, channel: str, external_id: str, text: str, *, display_name: str | None = None,
-                     phone: str | None = None, message_id: str | None = None) -> AgentReply:
+                     phone: str | None = None, message_id: str | None = None, extra: dict | None = None) -> AgentReply:
         text = (text or "").strip()[:4000]
         notices: list[str] = []
         async with self.sf() as s:
@@ -259,6 +266,8 @@ class SalesAgent:
                 await s.flush()
             elif display_name and not lead.display_name:
                 lead.display_name = display_name
+            if extra:
+                lead.extra = {**(lead.extra or {}), **extra}
 
             if text:
                 detected, sure = L.detect(text, lead.language)
@@ -278,10 +287,191 @@ class SalesAgent:
                 s.add(LeadMessage(lead_id=lead.id, channel=channel, direction="out", text=reply.text))
             reply.lead_id = lead.id
             reply.language = lead.language
+            sheet_row = _sheet_row("won", lead) if reply.won else None
             await s.commit()
         for note in notices:
             await self._notify(note)
+        if sheet_row:
+            await self._sheets(sheet_row)
         return reply
+
+    # ------------------------------------------------------------ full version: files and voice
+    async def handle_file(self, channel: str, external_id: str, *, kind: str, data: bytes | None, too_big: bool = False, file_name: str | None = None,
+                          mime: str | None = None, caption: str | None = None, message_id: str | None = None,
+                          display_name: str | None = None, phone: str | None = None, extra: dict | None = None) -> AgentReply:
+        """A document, photo or voice message. data=None -> the channel could not download it."""
+        name = media.safe_name(file_name, mime, kind)
+        if kind == "audio" and data and self.transcriber is not None and self.transcriber.enabled:
+            text = await self.transcriber.transcribe(data, name)
+            if text:
+                reply = await self.handle(channel, external_id, text, display_name=display_name, phone=phone, message_id=message_id, extra=extra)
+                await self._save_file(channel, external_id, kind, data, name, mime, caption, message_id, transcript=text)
+                return reply
+        too_big = too_big or (data is not None and len(data) > self.settings.sales_max_file_mb * 1024 * 1024)
+        saved = await self._save_file(channel, external_id, kind, None if too_big else data, name, mime, caption, message_id,
+                                      display_name=display_name, phone=phone, extra=extra)
+        if saved is None:  # webhook retry
+            return AgentReply(None)
+        lead, row, count = saved
+        lg = lead.language
+        who = lead.name or lead.display_name or lead.external_id
+        title = {"audio": "🎤 Овозли хабар", "photo": "🖼 Расм"}.get(kind, "📎 Ҳужжат")
+        card = f"{title} — лид #{lead.id} ({CHANNEL_NAMES.get(channel, channel)}, {who})\n{name}" + (f"\nИзоҳ: {caption}" if caption else "")
+        if row.path:
+            await self._notify_file(row.path, card)
+        else:
+            await self._notify(card + "\n(файлни юклаб бўлмади)")
+        if too_big:
+            text = L.text(lg, "file_too_big", mb=self.settings.sales_max_file_mb)
+        elif data is None:
+            text = L.text(lg, "file_failed")
+        elif kind == "audio":
+            text = L.text(lg, "voice_failed")
+        else:
+            text = L.text(lg, "file_received", n=count)
+            if caption and caption.strip():
+                follow = await self.handle(channel, external_id, caption, message_id=f"{message_id}:caption" if message_id else None)
+                if follow.text:
+                    text += "\n\n" + follow.text
+        await self._log_out(lead.id, channel, text)
+        return AgentReply(text, lead_id=lead.id, language=lg)
+
+    async def _save_file(self, channel, external_id, kind, data, name, mime, caption, message_id, transcript=None,
+                         display_name=None, phone=None, extra=None):
+        async with self.sf() as s:
+            if message_id and await s.scalar(select(LeadFile.id).where(LeadFile.channel == channel, LeadFile.external_message_id == message_id)):
+                return None
+            lead = await self._current_lead(s, channel, external_id)
+            if lead is None:
+                lead = Lead(channel=channel, external_id=external_id, language=self.settings.sales_default_language, stage=LeadStage.NEED,
+                            display_name=display_name, name=_first_name(display_name), phone=clean_phone(phone))
+                s.add(lead)
+                await s.flush()
+            if extra:
+                lead.extra = {**(lead.extra or {}), **extra}
+            path = None
+            if data:
+                try:
+                    path = str(media.store(self.settings.sales_files_dir, lead.id, name, data))
+                except OSError as exc:
+                    log.error("Файл сақланмади: %s", exc)
+            row = LeadFile(lead_id=lead.id, channel=channel, kind=kind, file_name=name, mime=mime, size=len(data or b""), path=path,
+                           caption=(caption or None), transcript=transcript, external_message_id=message_id)
+            s.add(row)
+            if transcript is None:
+                s.add(LeadMessage(lead_id=lead.id, channel=channel, direction="in", text=f"[{name}]" + (f" {caption}" if caption else "")))
+            lead.last_message_at = utcnow()
+            await s.flush()
+            count = len((await s.scalars(select(LeadFile.id).where(LeadFile.lead_id == lead.id, LeadFile.kind != "audio"))).all())
+            await s.commit()
+            return lead, row, count
+
+    async def _log_out(self, lead_id: int, channel: str, text: str) -> None:
+        async with self.sf() as s:
+            s.add(LeadMessage(lead_id=lead_id, channel=channel, direction="out", text=text))
+            await s.commit()
+
+    # ------------------------------------------------------------ full version: manager actions
+    async def manager_reply(self, lead_id: int, text: str) -> tuple[bool, str]:
+        """Send a manager's message to the client through the channel the client wrote in."""
+        async with self.sf() as s:
+            lead = await s.get(Lead, lead_id)
+            if lead is None:
+                return False, "Лид топилмади."
+            body = L.text(lead.language, "from_manager", text=text.strip())
+            channel, to, extra = lead.channel, lead.external_id, lead.extra
+        if channel == "phone":
+            return False, f"Бу мижоз телефон орқали келган, унга қўнғироқ қилинг: {to}"
+        if self.outbound is None or not self.outbound.can_send(channel):
+            return False, f"«{CHANNEL_NAMES.get(channel, channel)}» канали учун юбориш созланмаган."
+        if not await self.outbound.send(channel, to, body, extra):
+            return False, "Юборилмади. Instagram ва WhatsApp'да мижоз охирги марта 24 соатдан олдин ёзган бўлса, эркин хабар юбориб бўлмайди."
+        await self._log_out(lead_id, channel, body)
+        return True, "Юборилди ✅"
+
+    async def mark_paid(self, lead_id: int) -> tuple[bool, str]:
+        async with self.sf() as s:
+            lead = await s.get(Lead, lead_id)
+            if lead is None:
+                return False, "Лид топилмади."
+            if lead.prepaid_at is not None:
+                return False, f"Лид #{lead.id} аллақачон тўланган деб белгиланган."
+            lead.prepaid_at = utcnow()
+            text = L.text(lead.language, "paid")
+            channel, to, extra = lead.channel, lead.external_id, lead.extra
+            row = _sheet_row("paid", lead)
+            await s.commit()
+        delivered = bool(self.outbound and self.outbound.can_send(channel) and await self.outbound.send(channel, to, text, extra))
+        if delivered:
+            await self._log_out(lead_id, channel, text)
+        await self._sheets(row)
+        return True, f"💰 Лид #{lead_id}: тўлов белгиланди." + ("" if delivered else " Мижозга хабар юборилмади, ўзингиз хабар беринг.")
+
+    async def remind_stale(self, now=None) -> int:
+        """One reminder to clients who stopped halfway, within the 24-hour messaging window."""
+        if self.outbound is None:
+            return 0
+        now = now or utcnow()
+        hours = self.settings.sales_reminder_hours
+        older = now - timedelta(hours=hours)
+        newest_allowed = now - timedelta(hours=23)  # Meta: free replies only within 24 h of the client's last message
+        sent = 0
+        async with self.sf() as s:
+            rows = list(await s.scalars(select(Lead).where(
+                Lead.stage.in_([LeadStage.NEED, LeadStage.QUANTITY, LeadStage.NAME, LeadStage.PHONE, LeadStage.ADDRESS, LeadStage.CONFIRM]),
+                Lead.reminder_count == 0, Lead.last_message_at <= older, Lead.channel != "phone")))
+            products = await cat.load_catalog(s, self.settings.sales_catalog_path, self.settings.sales_catalog_from_books)
+            for lead in rows:
+                if lead.channel in ("instagram", "whatsapp", "messenger") and lead.last_message_at < newest_allowed:
+                    lead.reminder_count = 1  # window closed: never retry
+                    continue
+                if not lead.product_id:
+                    question = L.text(lead.language, "ask_need", catalog=cat.catalog_lines(products, lead.language))
+                else:
+                    stage = lead.stage
+                    question = self._next_question(lead, products, Extracted(), voice=False).text or ""
+                    lead.stage = stage
+                name = f", {lead.name}" if lead.name else ""
+                text = L.text(lead.language, "reminder", name=name, question=question)
+                lead.reminder_count = 1
+                lead.last_reminder_at = now
+                if await self.outbound.send(lead.channel, lead.external_id, text, lead.extra):
+                    s.add(LeadMessage(lead_id=lead.id, channel=lead.channel, direction="out", text=text))
+                    sent += 1
+            await s.commit()
+        return sent
+
+    async def _sheets(self, row: dict | None) -> None:
+        url = self.settings.sales_sheets_webhook_url
+        if row is None or url is None or not url.get_secret_value():
+            return
+        try:
+            if self.http is None:
+                import httpx
+
+                self.http = httpx.AsyncClient(timeout=15, follow_redirects=True)
+            resp = await self.http.post(url.get_secret_value(), json=row)
+            if resp.status_code >= 400:
+                log.warning("Google Sheets рад этди: %s", resp.status_code)
+        except Exception as exc:
+            log.warning("Google Sheets'га ёзилмади: %s", type(exc).__name__)
+
+    async def _notify_file(self, path: str, caption: str) -> None:
+        send_file = getattr(self.notifier, "send_file", None)
+        if send_file is None:
+            await self._notify(caption)
+            return
+        for tid in await self._manager_ids():
+            await send_file(tid, path, caption)
+
+    async def _manager_ids(self) -> list[int]:
+        ids = list(self.settings.sales_manager_ids)
+        if not ids:
+            from app.notify import director_ids
+
+            async with self.sf() as s:
+                ids = await director_ids(s)
+        return ids
 
     async def language_of(self, channel: str, external_id: str) -> str:
         async with self.sf() as s:
@@ -455,8 +645,17 @@ class SalesAgent:
             order, _ = await orders.create_order(s, client.id, product.book_id, lead.quantity, lead.unit_price, idempotency_key=f"lead:{lead.id}")
             lead.order_id = order.id
         service = bool(product and product.is_service)
+        text = L.text(lead.language, "won_service" if service else "won", id=lead.order_id or lead.id)
+        if product:
+            lead.currency = product.currency
+        if product and product.prepayment and lead.quantity:
+            lead.prepayment_due, lead.currency = product.prepayment * lead.quantity, product.currency
+            lead.payment_link = payments.payment_link(self.settings, lead.id, lead.prepayment_due, lead.currency)
+            pay = payments.payment_text(self.settings, lead.language, lead.id, lead.prepayment_due, lead.currency, lead.payment_link)
+            if pay:
+                text += "\n\n" + pay
         notices.append(self._manager_card(lead, "✅ Янги ариза" if service else "✅ Янги буюртма", product))
-        return AgentReply(L.text(lead.language, "won_service" if service else "won", id=lead.order_id or lead.id), done=True)
+        return AgentReply(text, done=True, won=True)
 
     def _manager_card(self, lead: Lead, title: str, product: cat.Product | None = None) -> str:
         lines = [f"{title} — лид #{lead.id}", f"Канал: {CHANNEL_NAMES.get(lead.channel, lead.channel)} ({lead.external_id})", f"Тил: {lead.language}"]
@@ -478,20 +677,16 @@ class SalesAgent:
             lines.append(f"Олдиндан тўлов: {cat.money(product.prepayment * lead.quantity, product.currency, 'uzc')}")
         if lead.order_id:
             lines.append(f"Буюртма: #{lead.order_id} (/orders)")
-        lines.append(f"Ёзишма: /lead {lead.id}")
+        if lead.payment_link:
+            lines.append(f"Тўлов ҳаволаси: {lead.payment_link}")
+        lines.append(f"Ёзишма: /lead {lead.id} · Жавоб: /reply {lead.id} матн" + (f" · Тўланди: /paid {lead.id}" if lead.prepayment_due else ""))
         return "\n".join(lines)
 
     async def _notify(self, text: str) -> None:
         if self.notifier is None:
             log.info("[сотув хабари]\n%s", text)
             return
-        ids = list(self.settings.sales_manager_ids)
-        if not ids:
-            from app.notify import director_ids
-
-            async with self.sf() as s:
-                ids = await director_ids(s)
-        for tid in ids:
+        for tid in await self._manager_ids():
             await self.notifier.send(tid, text)
 
 
@@ -503,6 +698,13 @@ def _offer_extras(product: cat.Product, lg: str) -> str:
     if product.prepayment:
         out += " " + L.text(lg, "prepay", amount=cat.money(product.prepayment, product.currency, lg))
     return out
+
+
+def _sheet_row(event: str, lead: Lead) -> dict:
+    return {"event": event, "lead_id": lead.id, "time": utcnow().isoformat(timespec="seconds"), "channel": lead.channel,
+            "language": lead.language, "name": lead.name, "phone": lead.phone, "service": lead.product_name, "quantity": lead.quantity,
+            "total": lead.total, "currency": lead.currency, "prepayment": lead.prepayment_due, "details": lead.address,
+            "paid": lead.prepaid_at is not None}
 
 
 def _first_name(display_name: str | None) -> str | None:

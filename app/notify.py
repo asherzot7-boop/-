@@ -29,6 +29,16 @@ class TelegramNotifier:
                 log.warning("Хабар юборилмади (%s): %s", telegram_id, type(exc).__name__)
 
 
+    async def send_file(self, telegram_id: int, path: str, caption: str) -> None:
+        from aiogram.types import FSInputFile
+
+        try:
+            await self.bot.send_document(telegram_id, FSInputFile(path), caption=caption[:1000])
+        except Exception as exc:
+            log.warning("Файл юборилмади (%s): %s", telegram_id, type(exc).__name__)
+            await self.send(telegram_id, caption)
+
+
 class ConsoleNotifier:
     """Demo mode: print notifications instead of sending them."""
 
@@ -38,6 +48,10 @@ class ConsoleNotifier:
     async def send(self, telegram_id: int, text: str) -> None:
         self.sent.append((telegram_id, text))
         log.info("[demo хабар → %s]\n%s", telegram_id, text)
+
+    async def send_file(self, telegram_id: int, path: str, caption: str) -> None:
+        self.sent.append((telegram_id, f"{caption}\n[файл: {path}]"))
+        log.info("[demo файл → %s] %s", telegram_id, path)
 
 
 async def director_ids(session: AsyncSession) -> list[int]:

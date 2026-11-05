@@ -26,6 +26,35 @@ def _keyboard(reply, business: bool):
     return ReplyKeyboardRemove()
 
 
+def _attachment(message: Message):
+    """(kind, file_id, file_name, mime, size) or None."""
+    if message.document is not None:
+        d = message.document
+        return "document", d.file_id, d.file_name, d.mime_type, d.file_size
+    if message.photo:
+        p = message.photo[-1]  # the largest size
+        return "photo", p.file_id, f"photo_{message.message_id}.jpg", "image/jpeg", p.file_size
+    if message.voice is not None:
+        v = message.voice
+        return "audio", v.file_id, f"voice_{message.message_id}.ogg", v.mime_type or "audio/ogg", v.file_size
+    if message.audio is not None:
+        a = message.audio
+        return "audio", a.file_id, a.file_name, a.mime_type, a.file_size
+    return None
+
+
+async def _download(bot, file_id: str) -> bytes | None:
+    import io
+
+    try:
+        buf = io.BytesIO()
+        await bot.download(file_id, destination=buf)
+        return buf.getvalue()
+    except Exception as exc:
+        log.warning("Telegram файли юклаб олинмади: %s", type(exc).__name__)
+        return None
+
+
 def build_sales_router(agent: SalesAgent) -> Router:
     router = Router(name="sales")
 
@@ -42,8 +71,18 @@ def build_sales_router(agent: SalesAgent) -> Router:
         if text.startswith("/start"):
             text = ""
         channel = "telegram_business" if business else "telegram"
-        reply = await agent.handle(channel, str(message.chat.id), text, display_name=message.from_user.full_name, phone=phone,
-                                   message_id=f"{message.chat.id}:{message.message_id}")
+        extra = {"business_connection_id": message.business_connection_id} if business and message.business_connection_id else None
+        msg_id = f"{message.chat.id}:{message.message_id}"
+        attachment = _attachment(message)
+        if attachment is not None:
+            kind, file_id, name, mime, size = attachment
+            too_big = size is not None and size > agent.settings.sales_max_file_mb * 1024 * 1024
+            data = None if too_big else await _download(message.bot, file_id)
+            reply = await agent.handle_file(channel, str(message.chat.id), kind=kind, data=data, too_big=too_big, file_name=name, mime=mime,
+                                            caption=message.caption, message_id=msg_id, display_name=message.from_user.full_name, extra=extra)
+        else:
+            reply = await agent.handle(channel, str(message.chat.id), text, display_name=message.from_user.full_name, phone=phone,
+                                       message_id=msg_id, extra=extra)
         if not reply.text:
             return
         if business:
@@ -51,11 +90,11 @@ def build_sales_router(agent: SalesAgent) -> Router:
         else:
             await message.answer(reply.text, reply_markup=_keyboard(reply, business))
 
-    @router.message(F.text | F.contact)
+    @router.message(F.text | F.contact | F.document | F.photo | F.voice | F.audio)
     async def on_message(message: Message) -> None:
         await _handle(message, business=False)
 
-    @router.business_message(F.text)
+    @router.business_message(F.text | F.document | F.photo | F.voice | F.audio)
     async def on_business(message: Message) -> None:
         await _handle(message, business=True)
 

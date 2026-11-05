@@ -54,6 +54,7 @@ HELP = """Nashriyot AI — буйруқлар
 /ai <мақсад> — агентли режим: AI асбобларни ўзи чақиради · /flow [id] — жараён қадамлари
 /pause · /resume — автоматик жараёнлар (раҳбар)
 /leads — сотув агенти лидлари (Instagram, WhatsApp, Telegram, телефон) · /lead <id> — ёзишма · /lead bot <id> — ботга қайтариш
+/reply <id> <матн> — мижозга жавоб (у ёзган каналга) · /paid <id> — олдиндан тўлов келди · /files <id> — мижоз юборган ҳужжатлар
 
 Оддий тилда ҳам ёзишингиз мумкин, масалан:
 «Янги дарслик лойиҳасини оч, биринчи бобни муҳаррирга бер, кейин методистга текширтир ва натижани менга юбор»"""
@@ -442,6 +443,51 @@ class CommandService:
         lines.append("")
         for m in msgs:
             lines.append(("👤 " if m.direction == "in" else "🤖 ") + m.text)
+        return Reply("\n".join(lines))
+
+    async def cmd_reply(self, s: AsyncSession, user, args, raw, key) -> Reply:
+        sales = getattr(self, "sales", None)
+        if sales is None:
+            return Reply("Сотув агенти ўчирилган.")
+        lead_id_text, _, text = raw.strip().partition(" ")
+        if not lead_id_text or not text.strip():
+            return Reply("Фойдаланиш: /reply <лид_id> <мижозга матн>\nМасалан: /reply 12 Pasportingiz tekshirildi, taqiq yo'q ✅")
+        ok, info = await sales.manager_reply(_int(lead_id_text, "Лид ID"), text)
+        if ok:
+            await audit.log_action(s, "lead.manager_reply", user, "lead", _int(lead_id_text, "Лид ID"))
+        return Reply(info)
+
+    async def cmd_paid(self, s: AsyncSession, user, args, raw, key) -> Reply:
+        sales = getattr(self, "sales", None)
+        if sales is None:
+            return Reply("Сотув агенти ўчирилган.")
+        if not args:
+            return Reply("Фойдаланиш: /paid <лид_id> — олдиндан тўлов келганини белгилайди ва мижозга хабар беради.")
+        lead_id = _int(args[0], "Лид ID")
+        ok, info = await sales.mark_paid(lead_id)
+        if ok:
+            await audit.log_action(s, "lead.paid", user, "lead", lead_id)
+        return Reply(info)
+
+    async def cmd_files(self, s: AsyncSession, user, args, raw, key) -> Reply:
+        from app.salesbot.models import LeadFile
+
+        if not args:
+            return Reply("Фойдаланиш: /files <лид_id>")
+        lead_id = _int(args[0], "Лид ID")
+        rows = list(await s.scalars(select(LeadFile).where(LeadFile.lead_id == lead_id).order_by(LeadFile.id)))
+        if not rows:
+            return Reply(f"Лид #{lead_id} ҳали файл юбормаган.")
+        kinds = {"document": "📎", "photo": "🖼", "audio": "🎤"}
+        lines = [f"Лид #{lead_id} файллари ({len(rows)} та):"]
+        for f in rows:
+            line = f"{kinds.get(f.kind, '📎')} {f.file_name} · {round(f.size / 1024)} KB · {self._local(f.created_at)}"
+            if f.transcript:
+                line += f"\n   «{f.transcript[:200]}»"
+            if not f.path:
+                line += " · (юклаб олинмаган)"
+            lines.append(line)
+        lines.append("\nФайллар келган заҳоти сизга юборилган. Серверда: " + (str(rows[0].path).rsplit("/", 1)[0] if rows[0].path else "—"))
         return Reply("\n".join(lines))
 
     async def cmd_agents(self, s: AsyncSession, user, args, raw, key) -> Reply:

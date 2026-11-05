@@ -75,6 +75,25 @@ class Settings(BaseSettings):
     sales_voice_tts_language: str = "tr-TR"  # Twilio has no Uzbek voice; Turkish reads Latin Uzbek closest
     sales_voice_name: str | None = None  # e.g. Polly.Filiz or Google.tr-TR-Standard-A
 
+    # ---- Sales agent: full version ----
+    sales_files_dir: str = "data/lead_files"  # documents, photos and voice messages from clients
+    sales_max_file_mb: int = 20
+    sales_stt_model: str = "whisper-1"  # voice messages -> text (needs OPENAI_API_KEY)
+    # Reminder to clients who stopped halfway. Meta lets a business reply freely only within 24 h.
+    sales_reminder_hours: float = 20
+    sales_reminder_check_seconds: int = 600
+    # Advance payment after the confirmation. payment_provider: none | card | payme | click | link
+    sales_payment_provider: str = "card"
+    sales_payment_card: str | None = None  # "8600 1234 5678 9012 (Jasur N.)" for a manual transfer
+    sales_usd_rate: float | None = None  # so'm per 1 USD, for Payme/Click links when prices are in USD
+    payme_merchant_id: str | None = None
+    payme_account_field: str = "order_id"
+    click_service_id: str | None = None
+    click_merchant_id: str | None = None
+    sales_payment_link_template: str | None = None  # e.g. https://pay.example/{lead_id}?amount={amount}&uzs={amount_uzs}
+    # Google Sheets: Apps Script web app URL that appends a row (see README)
+    sales_sheets_webhook_url: SecretStr | None = None
+
     @field_validator("director_ids", "staff_ids", "viewer_ids", "sales_manager_ids", mode="before")
     @classmethod
     def _ids(cls, value: object) -> list[int]:
@@ -95,7 +114,8 @@ class Settings(BaseSettings):
     def secret_values(self) -> list[str]:
         out = []
         for s in (self.bot_token, self.openai_api_key, self.api_token, self.sales_bot_token, self.meta_verify_token, self.meta_app_secret,
-                  self.instagram_access_token, self.messenger_page_token, self.whatsapp_access_token, self.twilio_auth_token):
+                  self.instagram_access_token, self.messenger_page_token, self.whatsapp_access_token, self.twilio_auth_token,
+                  self.sales_sheets_webhook_url):
             if s is not None and s.get_secret_value():
                 out.append(s.get_secret_value())
         return out

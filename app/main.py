@@ -54,9 +54,18 @@ async def build_container(settings: Settings) -> Container:
     sales = None
     if settings.sales_enabled:
         from app.salesbot.agent import SalesAgent, build_sales_model
+        from app.salesbot.channels.meta import MetaSender
+        from app.salesbot.media import Transcriber
+        from app.salesbot.outbound import MetaChannelSender, Outbound
 
-        sales = SalesAgent(sf, settings, model=build_sales_model(settings))
-    return Container(settings, engine, sf, coordinator, CommandService(sf, coordinator, settings, runtime=build_runtime(settings)), sales)
+        outbound = Outbound()
+        outbound.register(("instagram", "whatsapp", "messenger"), MetaChannelSender(MetaSender(settings)))
+        key = settings.openai_api_key.get_secret_value() if settings.llm_enabled else None
+        sales = SalesAgent(sf, settings, model=build_sales_model(settings), outbound=outbound,
+                           transcriber=Transcriber(key, settings.sales_stt_model))
+    service = CommandService(sf, coordinator, settings, runtime=build_runtime(settings))
+    service.sales = sales
+    return Container(settings, engine, sf, coordinator, service, sales)
 
 
 def build_runtime(settings: Settings):
@@ -79,6 +88,25 @@ async def _serve_api(c: Container) -> None:
     await uvicorn.Server(config).serve()
 
 
+async def sales_reminder_loop(c: Container) -> None:
+    """Every few minutes: one reminder to clients who stopped halfway (skipped while automation is paused)."""
+    from app.services import settings_store
+
+    while True:
+        try:
+            async with c.session_factory() as s:
+                enabled = await settings_store.automation_enabled(s)
+            if enabled:
+                n = await c.sales.remind_stale()
+                if n:
+                    log.info("Сотув эслатмалари юборилди: %s", n)
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            log.exception("Сотув эслатмаларида хатолик")
+        await asyncio.sleep(c.settings.sales_reminder_check_seconds)
+
+
 async def run(settings: Settings) -> None:
     from app.notify import ConsoleNotifier, TelegramNotifier
     from app.services.automation import scheduler_loop
@@ -90,11 +118,15 @@ async def run(settings: Settings) -> None:
         from aiogram import Bot
 
         from app.salesbot.channels.telegram import build_sales_dispatcher
+        from app.salesbot.outbound import TelegramSender
 
         sales_bot = Bot(settings.sales_bot_token.get_secret_value())
+        c.sales.outbound.register(("telegram", "telegram_business"), TelegramSender(sales_bot))
         sales_dp = build_sales_dispatcher(c.sales)
         jobs.append(asyncio.create_task(sales_dp.start_polling(sales_bot, handle_signals=False), name="sales-bot"))
         log.info("Мижозлар учун сотув боти ишга тушди")
+    if c.sales is not None:
+        jobs.append(asyncio.create_task(sales_reminder_loop(c), name="sales-reminders"))
     if settings.api_enabled:
         jobs.append(asyncio.create_task(_serve_api(c), name="api"))
         log.info("API: http://%s:%s/health", settings.api_host, settings.api_port)

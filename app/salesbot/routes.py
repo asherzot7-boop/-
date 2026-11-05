@@ -42,7 +42,14 @@ async def meta_verify(request: Request) -> PlainTextResponse:
 async def _process_meta(agent, sender: meta.MetaSender, items: list[meta.Incoming]) -> None:
     for it in items:
         try:
-            reply = await agent.handle(it.channel, it.sender, it.text, display_name=it.name, phone=it.phone, message_id=it.message_id)
+            if it.attachment:
+                limit = agent.settings.sales_max_file_mb * 1024 * 1024
+                data, too_big = await sender.download(it, limit)
+                reply = await agent.handle_file(it.channel, it.sender, kind=it.attachment["kind"], data=data, too_big=too_big,
+                                                file_name=it.attachment.get("name"), mime=it.attachment.get("mime"), caption=it.text or None,
+                                                message_id=it.message_id, display_name=it.name, phone=it.phone)
+            else:
+                reply = await agent.handle(it.channel, it.sender, it.text, display_name=it.name, phone=it.phone, message_id=it.message_id)
             if reply.text:
                 await sender.send(it.channel, it.sender, reply.text)
         except Exception:
