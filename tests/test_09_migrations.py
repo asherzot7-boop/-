@@ -12,7 +12,7 @@ from app.database.models import Base
 from app.database.session import alembic_config, run_migrations
 
 TABLES = {"users", "books", "tasks", "agent_runs", "clients", "orders", "expenses", "revenues", "inventory", "approvals", "audit_logs", "settings",
-          "leads", "lead_messages", "lead_files"}
+          "leads", "lead_messages", "lead_files", "faq_entries"}
 
 
 def _tables(path) -> set[str]:

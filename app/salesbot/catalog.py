@@ -57,6 +57,7 @@ class Product:
     ask_quantity: bool = True  # False (e.g. a consultation): quantity is 1, never asked
     prepayment: int = 0  # advance payment per person/unit, same currency; 0 -> none
     result_time: str | dict | None = None  # e.g. {"uz": "12 soatda", "tr": "12 saatte"}
+    next_offers: dict = field(default_factory=dict)  # result -> product id offered next, e.g. {"ban": "deport"}
 
     @property
     def is_service(self) -> bool:
@@ -113,6 +114,7 @@ def _product(item: dict) -> Product:
         price_from=bool(item.get("price_from", False)), documents=item.get("documents"), details_question=item.get("details_question"),
         ask_quantity=bool(item.get("ask_quantity", True)), prepayment=int(item.get("prepayment", 0)),
         result_time=item.get("result_time"),
+        next_offers=dict(item.get("next_offers") or {}),
     )
 
 

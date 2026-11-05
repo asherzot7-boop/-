@@ -49,7 +49,11 @@
         "проверка",
         "проверить",
         "pasportni"
-      ]
+      ],
+      "next_offers": {
+        "ban": "deport",
+        "ok": "ish-beruvchi"
+      }
     },
     {
       "id": "deport",

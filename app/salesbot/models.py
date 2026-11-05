@@ -98,3 +98,15 @@ class LeadFile(TimestampMixin, Base):
     external_message_id: Mapped[str | None] = mapped_column(String(200))
 
     lead: Mapped[Lead] = relationship(back_populates="files")
+
+
+class FaqEntry(TimestampMixin, Base):
+    """An answer a manager gave once (/answer), reused by the agent for the same question later."""
+
+    __tablename__ = "faq_entries"
+
+    question: Mapped[str] = mapped_column(Text, nullable=False)
+    answer: Mapped[str] = mapped_column(Text, nullable=False)
+    language: Mapped[str] = mapped_column(String(8), nullable=False)
+    uses: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)

@@ -55,6 +55,7 @@ HELP = """Nashriyot AI — буйруқлар
 /pause · /resume — автоматик жараёнлар (раҳбар)
 /leads — сотув агенти лидлари (Instagram, WhatsApp, Telegram, телефон) · /lead <id> — ёзишма · /lead bot <id> — ботга қайтариш
 /reply <id> <матн> — мижозга жавоб (у ёзган каналга) · /paid <id> — олдиндан тўлов келди · /files <id> — мижоз юборган ҳужжатлар
+/answer <id> <жавоб> — савол-жавоб (базага қўшилади) · /faq — ўрганилган жавоблар · /result <id> ban|ok — паспорт текшируви натижаси ва кейинги таклиф
 
 Оддий тилда ҳам ёзишингиз мумкин, масалан:
 «Янги дарслик лойиҳасини оч, биринчи бобни муҳаррирга бер, кейин методистга текширтир ва натижани менга юбор»"""
@@ -456,6 +457,53 @@ class CommandService:
         if ok:
             await audit.log_action(s, "lead.manager_reply", user, "lead", _int(lead_id_text, "Лид ID"))
         return Reply(info)
+
+    async def cmd_answer(self, s: AsyncSession, user, args, raw, key) -> Reply:
+        sales = getattr(self, "sales", None)
+        if sales is None:
+            return Reply("Сотув агенти ўчирилган.")
+        lead_id_text, _, text = raw.strip().partition(" ")
+        if not lead_id_text or not text.strip():
+            return Reply("Фойдаланиш: /answer <лид_id> <жавоб>\nЖавоб мижозга боради ва базага қўшилади: кейинги сафар агент ўзи жавоб беради.")
+        ok, info = await sales.manager_answer(_int(lead_id_text, "Лид ID"), text)
+        if ok:
+            await audit.log_action(s, "lead.answer", user, "lead", _int(lead_id_text, "Лид ID"))
+        return Reply(info)
+
+    async def cmd_result(self, s: AsyncSession, user, args, raw, key) -> Reply:
+        sales = getattr(self, "sales", None)
+        if sales is None:
+            return Reply("Сотув агенти ўчирилган.")
+        if len(args) < 2:
+            return Reply("Фойдаланиш: /result <лид_id> ban|ok [изоҳ]\n"
+                         "ban — тақиқ бор: мижозга натижа ва депорт хизмати таклифи боради\n"
+                         "ok — тақиқ йўқ: натижа ва иш ҳужжатлари таклифи")
+        note = raw.strip().split(None, 2)[2] if len(raw.strip().split(None, 2)) > 2 else ""
+        lead_id = _int(args[0], "Лид ID")
+        ok, info = await sales.send_result(lead_id, args[1], note)
+        if ok:
+            await audit.log_action(s, "lead.result", user, "lead", lead_id, {"outcome": args[1]})
+        return Reply(info)
+
+    async def cmd_faq(self, s: AsyncSession, user, args, raw, key) -> Reply:
+        from app.salesbot.models import FaqEntry
+
+        if args and args[0].lower() == "del":
+            check(user, Role.STAFF)
+            row = await s.get(FaqEntry, _int(args[1] if len(args) > 1 else "", "FAQ ID"))
+            if row is None:
+                raise LookupError("Бундай жавоб йўқ.")
+            row.active = False
+            await audit.log_action(s, "faq.disabled", user, "faq", row.id)
+            return Reply(f"#{row.id} жавоб ўчирилди: агент энди уни ишлатмайди.")
+        rows = list(await s.scalars(select(FaqEntry).where(FaqEntry.active.is_(True)).order_by(FaqEntry.id.desc()).limit(30)))
+        if not rows:
+            return Reply("Менежерлар ҳали /answer билан жавоб бермаган. Асосий жавоблар sales_faq.json файлида.")
+        lines = ["📚 Агент ўрганган жавоблар (охирги 30):"]
+        for r in rows:
+            lines.append(f"#{r.id} [{r.language}] «{r.question[:80]}» → {r.answer[:120]} · {r.uses} марта")
+        lines.append("\nЎчириш: /faq del <id>")
+        return Reply("\n".join(lines))
 
     async def cmd_paid(self, s: AsyncSession, user, args, raw, key) -> Reply:
         sales = getattr(self, "sales", None)

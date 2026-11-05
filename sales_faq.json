@@ -1,0 +1,30 @@
+{
+  "_comment": "Konsultantlar tasdiqlagan savol-javoblar. Faqat kompaniya bergan ma'lumotlar. Menejer /answer bilan bergan javoblar bazaga alohida qo'shiladi (/faq).",
+  "faq": [
+    {
+      "id": "sorgulama-muddat",
+      "questions": {"uz": ["pasport tekshiruvi qancha vaqtda chiqadi", "sorgulama natijasi qachon bo'ladi"], "tr": ["pasaport sorgulama sonucu ne zaman çıkar"], "ru": ["когда будет результат проверки паспорта"]},
+      "answer": {"uz": "Pasport tekshiruvi (sorgulama) natijasi 12 soat ichida chiqadi.", "tr": "Pasaport sorgulama sonucu 12 saat içinde çıkar.", "ru": "Результат проверки паспорта будет в течение 12 часов."}
+    },
+    {
+      "id": "hujjat-yuborish",
+      "questions": {"uz": ["hujjatlarni qanday yuboraman", "hujjatlarni qayerga yuborish kerak"], "tr": ["evrakları nasıl gönderirim", "belgeleri nereye göndereyim"], "ru": ["как отправить документы", "куда отправлять документы"]},
+      "answer": {"uz": "Barcha hujjatlar PDF (skaner) ko'rinishida WhatsApp orqali yuboriladi. Shu chatga ham yuborsangiz bo'ladi.", "tr": "Tüm evraklar PDF (tarama) olarak WhatsApp üzerinden gönderilir. Bu sohbete de gönderebilirsiniz.", "ru": "Все документы отправляются в PDF (скан) через WhatsApp. Можно прислать и в этот чат."}
+    },
+    {
+      "id": "deport-oldindan",
+      "questions": {"uz": ["deport uchun oldindan qancha to'lanadi", "deportga avans qancha"], "tr": ["deport için ön ödeme ne kadar"], "ru": ["какая предоплата за снятие депорта"]},
+      "answer": {"uz": "Deportni olib tashlash narxi 2 600 $, shundan 600 $ oldindan to'lanadi.", "tr": "Deport kaldırma ücreti 2 600 $, bunun 600 $'ı ön ödemedir.", "ru": "Снятие депорта стоит 2 600 $, из них 600 $ — предоплата."}
+    },
+    {
+      "id": "deport-muddat-oraligi",
+      "questions": {"uz": ["necha yillik deportni olib tashlaysiz", "10 yillik deport ham bo'ladimi"], "tr": ["kaç yıllık deportu kaldırıyorsunuz"], "ru": ["депорт на сколько лет снимаете"]},
+      "answer": {"uz": "Biz 1 yildan 5 yilgacha bo'lgan deportlar bilan ishlaymiz. Boshqa holatlarni konsultantimiz alohida ko'rib chiqadi.", "tr": "1 ila 5 yıllık deportlarla çalışıyoruz. Diğer durumları danışmanımız ayrıca değerlendirir.", "ru": "Мы работаем с депортами сроком от 1 до 5 лет. Другие случаи консультант рассмотрит отдельно."}
+    },
+    {
+      "id": "kafolat",
+      "questions": {"uz": ["kafolat berasizmi", "100 foiz chiqadimi"], "tr": ["garanti veriyor musunuz"], "ru": ["вы даёте гарантию"]},
+      "answer": {"uz": "Yakuniy qarorni Turkiya davlat organlari qabul qiladi, shuning uchun hech kim 100% kafolat bera olmaydi. Biz hujjatlarni to'g'ri tayyorlab, jarayonni oxirigacha kuzatib boramiz.", "tr": "Nihai kararı Türk resmi makamları verir, bu yüzden kimse %100 garanti veremez. Evrakları doğru hazırlayıp süreci sonuna kadar takip ediyoruz.", "ru": "Окончательное решение принимают государственные органы Турции, поэтому 100% гарантию не может дать никто. Мы правильно готовим документы и ведём процесс до конца."}
+    }
+  ]
+}

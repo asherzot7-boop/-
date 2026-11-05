@@ -26,8 +26,9 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from app.database.models import Book, utcnow
 from app.salesbot import catalog as cat
 from app.salesbot import lang as L
+from app.salesbot import faq as kb
 from app.salesbot import media, payments
-from app.salesbot.models import OPEN_STAGES, Lead, LeadFile, LeadMessage, LeadStage
+from app.salesbot.models import OPEN_STAGES, FaqEntry, Lead, LeadFile, LeadMessage, LeadStage
 
 log = logging.getLogger(__name__)
 
@@ -407,6 +408,73 @@ class SalesAgent:
         await self._sheets(row)
         return True, f"💰 Лид #{lead_id}: тўлов белгиланди." + ("" if delivered else " Мижозга хабар юборилмади, ўзингиз хабар беринг.")
 
+    async def manager_answer(self, lead_id: int, text: str) -> tuple[bool, str]:
+        """Answer the client's open question and keep the answer in the knowledge base."""
+        async with self.sf() as s:
+            lead = await s.get(Lead, lead_id)
+            if lead is None:
+                return False, "Лид топилмади."
+            question = (lead.extra or {}).get("open_question")
+        ok, info = await self.manager_reply(lead_id, text)
+        if not ok:
+            return ok, info
+        if question:
+            async with self.sf() as s:
+                lead = await s.get(Lead, lead_id)
+                lang = "uz" if lead.language == "uzc" else lead.language
+                s.add(FaqEntry(question=question, answer=text.strip(), language=lang))
+                lead.extra = {k: v for k, v in (lead.extra or {}).items() if k != "open_question"}
+                await s.commit()
+            info += " Жавоб базага қўшилди: кейинги сафар агент ўзи жавоб беради (/faq)."
+        return True, info
+
+    async def send_result(self, lead_id: int, outcome: str, note: str = "") -> tuple[bool, str]:
+        """Passport check result to the client, plus the next service when the catalog has one (e.g. ban -> deport)."""
+        outcome = {"taqiq": "ban", "bor": "ban", "deport": "ban", "yoq": "ok", "yo'q": "ok", "toza": "ok"}.get(outcome.lower(), outcome.lower())
+        if outcome not in ("ban", "ok"):
+            return False, "Натижа: ban (тақиқ бор) ёки ok (тақиқ йўқ). Масалан: /result 12 ban"
+        async with self.sf() as s:
+            lead = await s.get(Lead, lead_id)
+            if lead is None:
+                return False, "Лид топилмади."
+            lg = lead.language
+            products = await cat.load_catalog(s, self.settings.sales_catalog_path, self.settings.sales_catalog_from_books)
+            current = next((p for p in products if p.id == lead.product_id), None)
+            text = L.text(lg, "result_ban" if outcome == "ban" else "result_ok", note=f" {note.strip()}" if note.strip() else "")
+            offer = next((p for p in products if current and p.id == current.next_offers.get(outcome)), None)
+            target_id = lead.id
+            if offer is not None:
+                new = Lead(channel=lead.channel, external_id=lead.external_id, language=lg, stage=LeadStage.QUANTITY,
+                           display_name=lead.display_name, name=lead.name, phone=lead.phone,
+                           product_id=offer.id, product_name=offer.title(lg), unit_price=offer.price,
+                           quantity=None if offer.ask_quantity else 1,
+                           extra={**{k: v for k, v in (lead.extra or {}).items() if k == "business_connection_id"}, "upsell": True, "from_lead": lead.id})
+                s.add(new)
+                await s.flush()
+                target_id = new.id
+                text += "\n\n" + L.text(lg, "upsell", product=offer.title(lg), price=cat.price_text(offer, lg), extras=_offer_extras(offer, lg))
+            channel, to, extra = lead.channel, lead.external_id, lead.extra
+            await s.commit()
+        if channel == "phone" or self.outbound is None or not self.outbound.can_send(channel):
+            return False, f"Мижозга юбориб бўлмади ({CHANNEL_NAMES.get(channel, channel)}). Қўнғироқ қилинг: {to}\nМатн:\n{text}"
+        if not await self.outbound.send(channel, to, text, extra):
+            return False, "Юборилмади. Instagram/WhatsApp'да мижоз 24 соатдан олдин ёзган бўлса, эркин хабар юбориб бўлмайди."
+        await self._log_out(target_id, channel, text)
+        tail = f" Таклиф: «{offer.title('uz')}» (янги лид #{target_id})." if offer else ""
+        return True, f"Натижа юборилди ✅{tail}"
+
+    async def comment_wants_reply(self, text: str) -> bool:
+        """intent mode: only comments that ask something or name a service get a DM."""
+        mode = (self.settings.sales_comment_mode or "intent").lower()
+        if mode == "off":
+            return False
+        if mode == "all":
+            return bool(text.strip())
+        async with self.sf() as s:
+            products = await cat.load_catalog(s, self.settings.sales_catalog_path, self.settings.sales_catalog_from_books)
+        e = extract(text, products, LeadStage.NEED)
+        return bool(e.product or e.price_question or e.buy or e.docs or e.operator or kb.is_question(text))
+
     async def remind_stale(self, now=None) -> int:
         """One reminder to clients who stopped halfway, within the 24-hour messaging window."""
         if self.outbound is None:
@@ -524,6 +592,26 @@ class SalesAgent:
             notices.append(self._manager_card(lead, "🙋 Мижоз менежер сўради"))
             return AgentReply(L.text(lg, "handoff"), done=True)
 
+        if (lead.extra or {}).get("upsell") and e.no and not (e.product or e.quantity or e.phone or e.address) and lead.stage != LeadStage.CONFIRM:
+            lead.stage = LeadStage.LOST
+            return AgentReply(L.text(lg, "no_thanks"), done=True)
+
+        # knowledge base: approved answer, or the question goes to a manager
+        prefix = ""
+        entry = kb.match([f for f in await kb.load_all(s, self.settings.sales_faq_path) if _faq_lang_ok(f, lg)], text)
+        if entry is not None:
+            answer = entry.text(lg)
+            prefix = (L.to_cyrillic(answer) if lg == "uzc" and entry.language == "uz" else answer) + "\n\n"
+            if entry.db_id:
+                row = await s.get(FaqEntry, entry.db_id)
+                row.uses += 1
+        elif _real_question(text, e):
+            lead.extra = {**(lead.extra or {}), "open_question": text[:500]}
+            prefix = L.text(lg, "faq_unknown") + "\n\n"
+            who = lead.name or lead.display_name or lead.external_id
+            notices.append(f"❓ Савол — лид #{lead.id} ({CHANNEL_NAMES.get(lead.channel, lead.channel)}, {who}, тил: {lg}):\n«{text[:500]}»\n"
+                           f"Жавоб: /answer {lead.id} матн — жавоб мижозга боради ва базага қўшилади")
+
         # fill everything this message gives
         new_product = bool(e.product and lead.product_id != e.product.id)
         if e.product and (lead.product_id != e.product.id):
@@ -563,6 +651,8 @@ class SalesAgent:
             return AgentReply(L.text(lg, "bad_phone"), ask_phone=True)
 
         reply = self._next_question(lead, products, e, voice)
+        if prefix and reply.text:
+            reply.text = prefix + reply.text
         if e.docs and product and reply.text and lead.stage != LeadStage.CONFIRM:
             docs = product.docs(lg)
             info = L.text(lg, "docs", product=lead.product_name, docs=docs) if docs else L.text(lg, "docs_none")
@@ -698,6 +788,28 @@ def _offer_extras(product: cat.Product, lg: str) -> str:
     if product.prepayment:
         out += " " + L.text(lg, "prepay", amount=cat.money(product.prepayment, product.currency, lg))
     return out
+
+
+_QWORDS = re.compile(
+    r"qanday|qachon|nega|nimaga|qayer|qaerda|qancha vaqt|necha kun|necha soat|bo'ladimi|mumkinmi|kafolat|qanaqa|"
+    r"ne zaman|nasıl|nerede|neden|kaç gün|mümkün mü|garanti|как |когда|где |почему|сколько времени|можно ли|гарант|"
+    r"қандай|қачон|нега|қаерда|неча кун|бўладими|мумкинми", re.IGNORECASE)
+
+
+def _real_question(text: str, e: Extracted) -> bool:
+    """A question the funnel cannot answer: not a price, document, discount or yes/no message."""
+    if e.docs or e.discount or e.expensive or e.yes or e.no or e.phone:
+        return False
+    if _QWORDS.search(text) or _QWORDS.search(L.normalize(text)):
+        return True
+    return "?" in text and not (e.price_question or e.product or e.buy or e.quantity)
+
+
+def _faq_lang_ok(entry, lang: str) -> bool:
+    if entry.language is None:
+        return True
+    base = "uz" if lang == "uzc" else lang
+    return entry.language == base
 
 
 def _sheet_row(event: str, lead: Lead) -> dict:

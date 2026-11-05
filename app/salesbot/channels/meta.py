@@ -24,6 +24,7 @@ class Incoming:
     phone: str | None = None
     # file: {"kind": document|photo|audio, "url": ... (Instagram/Messenger) or "media_id": ... (WhatsApp), "name", "mime"}
     attachment: dict | None = None
+    comment_id: str | None = None  # Instagram comment: answer privately in Direct + a short public reply
 
 
 _IG_KIND = {"image": "photo", "file": "document", "audio": "audio", "video": "document"}
@@ -57,6 +58,17 @@ def parse(payload: dict) -> list[Incoming]:
                     if kind and url:
                         mid = f"{msg.get('mid')}:{i}" if msg.get("mid") else None
                         out.append(Incoming(channel, str(sender), "", mid, attachment={"kind": kind, "url": url, "name": None, "mime": None}))
+            if obj == "instagram":
+                own = str(entry.get("id") or "")
+                for change in entry.get("changes") or []:
+                    v = change.get("value") or {}
+                    who = v.get("from") or {}
+                    if change.get("field") != "comments" or not v.get("id") or not v.get("text") or not who.get("id"):
+                        continue
+                    if str(who["id"]) == own:
+                        continue  # our own reply under the post
+                    out.append(Incoming("instagram", str(who["id"]), str(v["text"]), f"comment:{v['id']}", who.get("username"),
+                                        comment_id=str(v["id"])))
         elif obj == "whatsapp_business_account":
             for change in entry.get("changes") or []:
                 value = change.get("value") or {}
@@ -132,6 +144,31 @@ class MetaSender:
         if not att.get("mime"):
             att["mime"] = resp.headers.get("content-type")
         return resp.content, False
+
+    async def _post(self, url: str, body: dict, token: str, what: str) -> bool:
+        try:
+            resp = await self._http().post(url, json=body, headers={"Authorization": f"Bearer {token}"})
+        except Exception as exc:
+            log.warning("Meta API хатоси (%s): %s", what, type(exc).__name__)
+            return False
+        if resp.status_code >= 400:
+            log.warning("Meta API рад этди (%s): %s %s", what, resp.status_code, resp.text[:300])
+            return False
+        return True
+
+    async def private_reply(self, comment_id: str, text: str) -> bool:
+        """Direct message to the author of a comment (Instagram allows one, within 7 days of the comment)."""
+        token = self._secret(self.s.instagram_access_token)
+        if not token:
+            return False
+        return await self._post(f"{self.s.meta_graph_url.rstrip('/')}/me/messages",
+                                {"recipient": {"comment_id": comment_id}, "message": {"text": text[:1000]}}, token, "private reply")
+
+    async def comment_reply(self, comment_id: str, text: str) -> bool:
+        token = self._secret(self.s.instagram_access_token)
+        if not token:
+            return False
+        return await self._post(f"{self.s.meta_graph_url.rstrip('/')}/{comment_id}/replies", {"message": text[:300]}, token, "comment reply")
 
     async def send(self, channel: str, recipient: str, text: str) -> bool:
         base = self.s.meta_graph_url.rstrip("/")

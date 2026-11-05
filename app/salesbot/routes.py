@@ -42,6 +42,9 @@ async def meta_verify(request: Request) -> PlainTextResponse:
 async def _process_meta(agent, sender: meta.MetaSender, items: list[meta.Incoming]) -> None:
     for it in items:
         try:
+            if it.comment_id:
+                await _process_comment(agent, sender, it)
+                continue
             if it.attachment:
                 limit = agent.settings.sales_max_file_mb * 1024 * 1024
                 data, too_big = await sender.download(it, limit)
@@ -54,6 +57,22 @@ async def _process_meta(agent, sender: meta.MetaSender, items: list[meta.Incomin
                 await sender.send(it.channel, it.sender, reply.text)
         except Exception:
             log.exception("Meta хабарини қайта ишлашда хато (%s)", it.channel)
+
+
+async def _process_comment(agent, sender: meta.MetaSender, it: meta.Incoming) -> None:
+    import random
+
+    if not await agent.comment_wants_reply(it.text):
+        return
+    reply = await agent.handle("instagram", it.sender, it.text, display_name=it.name, message_id=it.message_id)
+    if not reply.text:
+        return  # duplicate webhook
+    lg = reply.language
+    if await sender.private_reply(it.comment_id, reply.text):
+        public = random.choice(L.text(lg, "comment_public").split("|"))
+    else:
+        public = L.text(lg, "comment_public_nodm")
+    await sender.comment_reply(it.comment_id, public)
 
 
 @router.post("/meta")

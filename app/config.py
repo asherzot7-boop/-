@@ -95,6 +95,10 @@ class Settings(BaseSettings):
     sales_payment_link_template: str | None = None  # e.g. https://pay.example/{lead_id}?amount={amount}&uzs={amount_uzs}
     # Google Sheets: Apps Script web app URL that appends a row (see README)
     sales_sheets_webhook_url: SecretStr | None = None
+    # Knowledge base: curated answers (JSON) + answers managers gave with /answer
+    sales_faq_path: str | None = "sales_faq.json"
+    # Instagram comments: intent (reply to questions/prices only) | all | off
+    sales_comment_mode: str = "intent"
 
     @field_validator("director_ids", "staff_ids", "viewer_ids", "sales_manager_ids", mode="before")
     @classmethod
