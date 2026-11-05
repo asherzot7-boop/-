@@ -25,8 +25,8 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.database.models import Book, utcnow
 from app.salesbot import catalog as cat
-from app.salesbot import lang as L
 from app.salesbot import faq as kb
+from app.salesbot import lang as L
 from app.salesbot import media, payments
 from app.salesbot.models import OPEN_STAGES, FaqEntry, Lead, LeadFile, LeadMessage, LeadStage
 
