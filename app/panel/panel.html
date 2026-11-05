@@ -1,0 +1,365 @@
+<!doctype html>
+<html lang="uz-Cyrl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Nam Tour панели</title>
+<style>
+/* Layout: one top bar with four tabs; each tab is a grid of plain cards. Palette: cobalt, turquoise, saffron (tilework). */
+:root {
+  --bg: #EEF2F6; --card: #FFFFFF; --fg: #142030; --muted: #5A6A80; --line: #D3DCE7;
+  --cobalt: #1D4E9E; --turq: #0F8A87; --saffron: #B87A12; --red: #B42318;
+  --ok-bg: #DDF3F1; --warn-bg: #FBEBD0; --bad-bg: #FBE1DE; --in-bg: #EEF2F6; --out-bg: #E3ECFB;
+  --font: "Segoe UI", system-ui, -apple-system, Roboto, sans-serif; --mono: "Cascadia Mono", Consolas, ui-monospace, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root { --bg: #0D1420; --card: #142033; --fg: #E6ECF3; --muted: #9AA9BD; --line: #26354A;
+    --cobalt: #7FA6EE; --turq: #45C9C3; --saffron: #E6B04F; --red: #F08A80;
+    --ok-bg: #12302F; --warn-bg: #33280F; --bad-bg: #3A1A17; --in-bg: #1A2638; --out-bg: #1B2C4A; color-scheme: dark; }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--fg); font: 15px/1.5 var(--font); }
+header { position: sticky; top: 0; z-index: 5; background: var(--card); border-bottom: 1px solid var(--line); }
+.bar { max-width: 1200px; margin: 0 auto; padding: 10px 16px; display: flex; gap: 16px; align-items: center; flex-wrap: wrap; }
+.brand { font-weight: 700; letter-spacing: .01em; }
+.brand small { display: block; font-weight: 400; color: var(--muted); font-size: 12px; }
+nav { display: flex; gap: 4px; flex-wrap: wrap; flex: 1; }
+nav a { text-decoration: none; color: var(--muted); padding: 8px 12px; border-radius: 8px; font-weight: 600; font-size: 14px; }
+nav a[aria-current="page"] { color: var(--fg); background: var(--bg); }
+nav a .badge { margin-left: 6px; }
+.stamp { color: var(--muted); font-size: 12px; font-family: var(--mono); }
+main { max-width: 1200px; margin: 0 auto; padding: 20px 16px 60px; display: flex; flex-direction: column; gap: 20px; }
+h1 { font-size: 22px; margin: 0; }
+h2 { font-size: 16px; margin: 0; }
+.sub { color: var(--muted); margin: 2px 0 0; }
+.grid { display: grid; gap: 14px; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); }
+.grid.two { grid-template-columns: repeat(auto-fit, minmax(min(100%, 440px), 1fr)); }
+.card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 16px; display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.kpis { display: grid; gap: 12px; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); }
+.kpi { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; }
+.kpi b { display: block; font-size: 26px; font-variant-numeric: tabular-nums; line-height: 1.2; }
+.kpi span { color: var(--muted); font-size: 13px; }
+.pill { display: inline-block; font-size: 12px; font-weight: 600; padding: 2px 8px; border-radius: 999px; white-space: nowrap; }
+.ok { background: var(--ok-bg); color: var(--turq); } .partial { background: var(--warn-bg); color: var(--saffron); } .off { background: var(--bad-bg); color: var(--red); }
+.badge { display: inline-block; min-width: 20px; text-align: center; font-size: 12px; padding: 0 6px; border-radius: 999px; background: var(--red); color: #fff; }
+.muted { color: var(--muted); font-size: 13px; }
+.mono { font-family: var(--mono); font-size: 12px; }
+.row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.spread { justify-content: space-between; }
+table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+td, th { padding: 7px 4px; border-top: 1px solid var(--line); text-align: left; vertical-align: top; }
+th { color: var(--muted); font-weight: 600; font-size: 12px; border-top: 0; }
+td.n, th.n { text-align: right; }
+.meter { height: 8px; background: var(--bg); border-radius: 99px; overflow: hidden; min-width: 60px; }
+.meter i { display: block; height: 100%; background: var(--turq); }
+.chart { width: 100%; height: auto; display: block; }
+.chart text { fill: var(--muted); font: 11px var(--font); }
+.feed { display: flex; flex-direction: column; gap: 6px; max-height: 560px; overflow: auto; }
+.msg { padding: 8px 10px; border-radius: 10px; font-size: 14px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.msg.in { background: var(--in-bg); } .msg.out { background: var(--out-bg); }
+.msg .meta { display: block; color: var(--muted); font-size: 12px; margin-bottom: 2px; white-space: normal; }
+textarea, input[type=text], input[type=password], select { width: 100%; font: inherit; color: var(--fg); background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; }
+textarea { min-height: 64px; resize: vertical; }
+button { font: inherit; font-weight: 600; border: 1px solid var(--line); background: var(--card); color: var(--fg); border-radius: 8px; padding: 7px 12px; cursor: pointer; }
+button.primary { background: var(--cobalt); border-color: var(--cobalt); color: #fff; }
+button.warn { color: var(--red); }
+button:disabled { opacity: .5; cursor: progress; }
+button:focus-visible, a:focus-visible, textarea:focus-visible, input:focus-visible { outline: 2px solid var(--saffron); outline-offset: 2px; }
+.lead h3 { margin: 0; font-size: 15px; }
+.kv { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 2px 10px; font-size: 14px; }
+.kv dt { color: var(--muted); } .kv dd { margin: 0; overflow-wrap: anywhere; }
+.files { display: flex; gap: 6px; flex-wrap: wrap; }
+.files button { font-weight: 500; font-size: 13px; padding: 4px 8px; }
+.toast { position: fixed; right: 16px; bottom: 16px; max-width: 420px; background: var(--fg); color: var(--bg); padding: 10px 14px; border-radius: 10px; z-index: 20; }
+.empty { color: var(--muted); padding: 10px 0; }
+.login { max-width: 420px; margin: 60px auto; }
+dialog { border: 1px solid var(--line); border-radius: 14px; background: var(--card); color: var(--fg); width: min(720px, calc(100vw - 32px)); padding: 18px; }
+dialog::backdrop { background: rgba(0,0,0,.45); }
+.conn { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px 12px; padding: 10px 0; border-top: 1px solid var(--line); }
+.conn:first-of-type { border-top: 0; }
+.conn .side { text-align: right; display: flex; flex-direction: column; align-items: flex-end; gap: 4px; }
+.conn .mono { overflow-wrap: anywhere; }
+@media (max-width: 560px) {
+  .kpi b { font-size: 22px; }
+  nav { flex-basis: 100%; order: 3; flex-wrap: nowrap; overflow-x: auto; }
+  nav a { padding: 6px 8px; white-space: nowrap; }
+  .conn { grid-template-columns: minmax(0, 1fr); }
+  .conn .side { align-items: flex-start; text-align: left; flex-direction: row; gap: 8px; }
+}
+</style>
+</head>
+<body>
+<header>
+  <div class="bar">
+    <div class="brand">Jihan Jan Jasur Nam Tour<small>сотув агенти панели</small></div>
+    <nav id="tabs" aria-label="Бўлимлар">
+      <a href="#connections">Уланишлар</a>
+      <a href="#director">Раҳбар</a>
+      <a href="#agent">Агент иш жараёни</a>
+      <a href="#manager">Менежер <span class="badge" id="mgr-badge" hidden></span></a>
+    </nav>
+    <span class="stamp" id="stamp"></span>
+  </div>
+</header>
+<main id="main"></main>
+<dialog id="dlg"></dialog>
+<div class="toast" id="toast" hidden></div>
+
+<script>
+"use strict";
+const $main = document.getElementById("main");
+const TABS = ["connections", "director", "agent", "manager"];
+let token = "";
+try { token = localStorage.getItem("panel_token") || ""; } catch (e) {}
+let days = 30, timer = null;
+
+// ---------- safe DOM builder: every client text goes through textContent
+function h(tag, attrs, ...kids) {
+  const el = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs || {})) {
+    if (v == null || v === false) continue;
+    if (k.startsWith("on")) el.addEventListener(k.slice(2), v);
+    else if (k === "class") el.className = v;
+    else el.setAttribute(k, v === true ? "" : v);
+  }
+  for (const kid of kids.flat()) if (kid != null && kid !== false) el.append(kid instanceof Node ? kid : String(kid));
+  return el;
+}
+const fmtTime = iso => iso ? new Date(iso).toLocaleString("ru-RU", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }) : "—";
+const ago = iso => {
+  if (!iso) return "ҳали йўқ";
+  const m = Math.round((Date.now() - new Date(iso)) / 60000);
+  return m < 1 ? "ҳозир" : m < 60 ? `${m} дақиқа олдин` : m < 1440 ? `${Math.round(m / 60)} соат олдин` : `${Math.round(m / 1440)} кун олдин`;
+};
+function toast(text) {
+  const t = document.getElementById("toast"); t.textContent = text; t.hidden = false;
+  clearTimeout(toast.t); toast.t = setTimeout(() => t.hidden = true, 5000);
+}
+
+async function api(path, opts = {}) {
+  const res = await fetch("/api/panel" + path, { ...opts, headers: { "X-API-Token": token, "Content-Type": "application/json", ...(opts.headers || {}) } });
+  if (res.status === 401 || res.status === 403) { showLogin(res.status === 403 ? "API_TOKEN .env файлида берилмаган" : "Токен нотўғри"); throw new Error("auth"); }
+  if (!res.ok) throw new Error(await res.text());
+  return res;
+}
+const getJSON = path => api(path).then(r => r.json());
+const post = (path, body) => api(path, { method: "POST", body: JSON.stringify(body || {}) }).then(r => r.json());
+
+function showLogin(err) {
+  clearInterval(timer);
+  $main.replaceChildren(h("form", { class: "card login", onsubmit: e => {
+      e.preventDefault(); token = e.target.querySelector("input").value.trim();
+      try { localStorage.setItem("panel_token", token); } catch (x) {}
+      route();
+    } },
+    h("h1", {}, "Панелга кириш"),
+    h("p", { class: "muted" }, ".env файлидаги API_TOKEN қийматини киритинг. Панел фақат шу компьютерда очилади."),
+    err ? h("p", { class: "pill off" }, err) : null,
+    h("label", { for: "tok" }, "API_TOKEN"),
+    h("input", { id: "tok", type: "password", autocomplete: "current-password", required: true }),
+    h("button", { class: "primary", type: "submit" }, "Кириш")));
+}
+
+// ---------- charts (inline SVG, one scale per chart)
+function barsChart(rows) {
+  const W = 640, H = 200, pad = 26, n = rows.length || 1, max = Math.max(1, ...rows.map(r => r.leads));
+  const bw = (W - pad * 2) / n, svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+  svg.setAttribute("viewBox", `0 0 ${W} ${H}`); svg.setAttribute("class", "chart"); svg.setAttribute("role", "img");
+  svg.setAttribute("aria-label", "Кунлик мижозлар ва аризалар");
+  const y = v => H - pad - (v / max) * (H - pad * 2);
+  const add = (tag, a) => { const e = document.createElementNS(svg.namespaceURI, tag); for (const k in a) e.setAttribute(k, a[k]); svg.append(e); return e; };
+  [0, Math.ceil(max / 2), max].forEach(v => {
+    add("line", { x1: pad, x2: W - pad, y1: y(v), y2: y(v), stroke: "currentColor", "stroke-opacity": .12 });
+    add("text", { x: 2, y: y(v) + 4 }).textContent = v;
+  });
+  rows.forEach((r, i) => {
+    const x = pad + i * bw;
+    add("rect", { x: x + bw * .15, y: y(r.leads), width: bw * .7, height: H - pad - y(r.leads), fill: "var(--cobalt)", "fill-opacity": .35, rx: 2 });
+    add("rect", { x: x + bw * .15, y: y(r.won), width: bw * .7, height: H - pad - y(r.won), fill: "var(--turq)", rx: 2 });
+    const step = Math.ceil(n / 8);
+    if (i % step === 0 || (i === n - 1 && (n - 1) % step >= step / 2)) add("text", { x: x + bw / 2, y: H - 8, "text-anchor": "middle" }).textContent = r.day.slice(5).replace("-", ".");
+  });
+  return svg;
+}
+function meterTable(rows, cols) {
+  const max = Math.max(1, ...rows.map(r => r.leads ?? r.count));
+  return h("table", {}, h("thead", {}, h("tr", {}, cols.map(c => h("th", { class: c.n ? "n" : "" }, c.t)))),
+    h("tbody", {}, rows.length ? rows.map(r => h("tr", {}, cols.map(c => c.meter
+      ? h("td", { style: "width:35%" }, h("div", { class: "meter" }, h("i", { style: `width:${100 * (r[c.k]) / max}%` })))
+      : h("td", { class: c.n ? "n" : "" }, c.f ? c.f(r) : r[c.k])))) : h("tr", {}, h("td", { colspan: cols.length, class: "empty" }, "Ҳали маълумот йўқ"))));
+}
+
+// ---------- 1. connections
+async function viewConnections() {
+  const items = await getJSON("/connections");
+  const groups = {};
+  items.forEach(i => (groups[i.group] ||= []).push(i));
+  const ok = items.filter(i => i.status === "ok").length;
+  const label = { ok: "уланган", partial: "қисман", off: "уланмаган" };
+  return [
+    h("div", {}, h("h1", {}, "Уланишлар"), h("p", { class: "sub" }, `${items.length} та уланишдан ${ok} таси тайёр. Махфий калитлар кўрсатилмайди, фақат берилгани.`)),
+    ...Object.entries(groups).map(([g, list]) => h("section", { class: "card" }, h("h2", {}, g),
+      h("div", {}, list.map(i => h("div", { class: "conn" },
+        h("div", {}, h("strong", {}, i.title), i.detail ? h("div", { class: "muted" }, i.detail) : null,
+          i.hint ? h("div", { class: "muted" }, "Нима қилиш керак: ", i.hint) : null,
+          i.missing.length ? h("div", { class: "mono muted" }, "Етишмайди: ", i.missing.join(", ")) : null),
+        h("div", { class: "side" }, h("span", { class: "pill " + i.status }, label[i.status]),
+          i.last_activity ? h("span", { class: "muted" }, "охирги: " + ago(i.last_activity)) : null)))))),
+  ];
+}
+
+// ---------- 2. director
+async function viewDirector() {
+  const d = await getJSON("/director?days=" + days);
+  const money = list => list.length ? list.map(m => m.text).join(" + ") : "0";
+  const t = d.totals;
+  return [
+    h("div", { class: "row spread" },
+      h("div", {}, h("h1", {}, "Раҳбар"), h("p", { class: "sub" }, `Охирги ${d.days} кун`)),
+      h("div", { class: "row" }, [7, 30, 90].map(n => h("button", { class: n === days ? "primary" : "", onclick: () => { days = n; route(); } }, `${n} кун`)))),
+    h("div", { class: "kpis" },
+      h("div", { class: "kpi" }, h("b", {}, t.leads), h("span", {}, "мижоз ёзди")),
+      h("div", { class: "kpi" }, h("b", {}, t.won), h("span", {}, "ариза тасдиқланди")),
+      h("div", { class: "kpi" }, h("b", {}, t.conversion + "%"), h("span", {}, "конверсия")),
+      h("div", { class: "kpi" }, h("b", {}, money(d.revenue)), h("span", {}, "аризалар суммаси")),
+      h("div", { class: "kpi" }, h("b", {}, money(d.prepaid)), h("span", {}, "олдиндан тўлов келди, кутилган: " + money(d.prepay_due))),
+      h("div", { class: "kpi" }, h("b", {}, `${t.upsell_won}/${t.upsell_offered}`), h("span", {}, "кейинги таклиф: қабул / юборилган"))),
+    h("section", { class: "card" }, h("div", { class: "row spread" }, h("h2", {}, "Кунлар бўйича"),
+        h("span", { class: "muted" }, "оч кўк — ёзганлар, яшил — ариза")), barsChart(d.daily)),
+    h("div", { class: "grid two" },
+      h("section", { class: "card" }, h("h2", {}, "Воронка: қайси қадамгача етди"),
+        meterTable(d.funnel, [{ t: "Қадам", k: "stage" }, { t: "", k: "count", meter: true }, { t: "Сони", k: "count", n: true }])),
+      h("section", { class: "card" }, h("h2", {}, "Каналлар"),
+        meterTable(d.by_channel, [{ t: "Канал", k: "name" }, { t: "", k: "leads", meter: true }, { t: "Мижоз", k: "leads", n: true },
+          { t: "Ариза", k: "won", n: true }, { t: "%", n: true, f: r => Math.round(100 * r.won / Math.max(1, r.leads)) }])),
+      h("section", { class: "card" }, h("h2", {}, "Хизматлар"),
+        meterTable(d.by_service, [{ t: "Хизмат", k: "name" }, { t: "Сўради", k: "leads", n: true }, { t: "Ариза", k: "won", n: true }])),
+      h("section", { class: "card" }, h("h2", {}, "Тиллар"),
+        meterTable(d.by_language, [{ t: "Тил", k: "name" }, { t: "", k: "leads", meter: true }, { t: "Мижоз", k: "leads", n: true }]))),
+    h("p", { class: "muted" }, `Менежерга ўтган: ${t.handoff} · Рад этган: ${t.lost}`),
+  ];
+}
+
+// ---------- 3. agent process
+async function viewAgent() {
+  const a = await getJSON("/agent");
+  const t = a.today;
+  return [
+    h("div", {}, h("h1", {}, "Агент иш жараёни"), h("p", { class: "sub" }, "Режим: " + a.mode + " · бугунги кун")),
+    h("div", { class: "kpis" },
+      h("div", { class: "kpi" }, h("b", {}, t.in), h("span", {}, "хабар келди")),
+      h("div", { class: "kpi" }, h("b", {}, t.out), h("span", {}, "агент жавоб берди")),
+      h("div", { class: "kpi" }, h("b", {}, t.new_leads), h("span", {}, "янги мижоз")),
+      h("div", { class: "kpi" }, h("b", {}, t.won), h("span", {}, "ариза")),
+      h("div", { class: "kpi" }, h("b", {}, t.files), h("span", {}, "ҳужжат қабул қилинди")),
+      h("div", { class: "kpi" }, h("b", {}, `${t.voice_understood}/${t.voice}`), h("span", {}, "овозли хабар тушунилди")),
+      h("div", { class: "kpi" }, h("b", {}, t.reminders), h("span", {}, "эслатма юборилди")),
+      h("div", { class: "kpi" }, h("b", {}, `${a.faq.learned} · ${a.faq.uses}`), h("span", {}, "ўрганилган жавоб · ишлатилди"))),
+    h("div", { class: "grid two" },
+      h("section", { class: "card" }, h("h2", {}, "Ҳозир суҳбатдаги мижозлар"),
+        meterTable(a.open_by_stage, [{ t: "Қадам", k: "stage" }, { t: "", k: "count", meter: true }, { t: "Сони", k: "count", n: true }]),
+        h("p", { class: "muted" }, `Менежерни кутмоқда: ${a.waiting.handoff} · жавобсиз савол: ${a.waiting.questions}`)),
+      h("section", { class: "card" }, h("h2", {}, "Жонли ёзишма (охирги 40)"),
+        h("div", { class: "feed" }, a.feed.length ? a.feed.map(m => h("div", { class: "msg " + m.direction },
+          h("span", { class: "meta" }, `${fmtTime(m.time)} · ${m.channel} · ${m.direction === "in" ? m.who : "агент"} · `,
+            h("a", { href: "#", onclick: e => { e.preventDefault(); openLead(m.lead_id); } }, "#" + m.lead_id)), m.text))
+          : h("p", { class: "empty" }, "Ҳали хабар йўқ")))),
+  ];
+}
+
+// ---------- 4. manager
+async function act(btn, path, body, after) {
+  btn.disabled = true;
+  try { const r = await post(path, body); toast(r.message); if (r.ok) { after && after(); route(); } }
+  catch (e) { if (e.message !== "auth") toast("Хато: " + e.message); }
+  finally { btn.disabled = false; }
+}
+async function openFile(id, name) {
+  try {
+    const blob = await (await api("/files/" + id)).blob();
+    const url = URL.createObjectURL(blob);
+    const a = h("a", { href: url, target: "_blank", rel: "noopener", download: blob.type.startsWith("image/") || blob.type === "application/pdf" ? null : name });
+    document.body.append(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 60000);
+  } catch (e) { if (e.message !== "auth") toast("Файл очилмади"); }
+}
+function leadCard(c, kind) {
+  const ta = h("textarea", { id: `t-${kind}-${c.id}`, placeholder: kind === "questions" ? "Жавоб: мижозга боради ва базага ёзилади" : "Мижозга хабар" });
+  const note = h("input", { type: "text", id: `n-${c.id}`, placeholder: "Изоҳ (масалан: 2023-йилдан, 5 йилга)" });
+  const actions = [];
+  if (kind === "payments") actions.push(h("button", { class: "primary", onclick: e => act(e.target, `/leads/${c.id}/paid`) }, "Тўлов келди ✓"));
+  if (kind === "results") actions.push(note,
+    h("button", { class: "warn", onclick: e => act(e.target, `/leads/${c.id}/result`, { outcome: "ban", note: note.value }) }, "Тақиқ бор → депорт таклифи"),
+    h("button", { class: "primary", onclick: e => act(e.target, `/leads/${c.id}/result`, { outcome: "ok", note: note.value }) }, "Тақиқ йўқ ✓"));
+  if (c.can_write && (kind === "handoff" || kind === "questions" || kind === "payments")) actions.push(ta,
+    h("button", { class: kind === "questions" ? "primary" : "", onclick: e => {
+      if (!ta.value.trim()) return ta.focus();
+      act(e.target, `/leads/${c.id}/${kind === "questions" ? "answer" : "reply"}`, { text: ta.value }, () => ta.value = "");
+    } }, kind === "questions" ? "Жавоб бериш ва ўргатиш" : "Юбориш"));
+  return h("article", { class: "card lead" },
+    h("div", { class: "row spread" }, h("h3", {}, `#${c.id} ${c.who}`), h("span", { class: "pill " + (c.paid ? "ok" : "partial") }, c.channel)),
+    h("dl", { class: "kv" },
+      h("dt", {}, "Телефон"), h("dd", {}, c.phone || "—"),
+      h("dt", {}, "Хизмат"), h("dd", {}, c.service ? `${c.service}${c.quantity ? " × " + c.quantity : ""}` : "—"),
+      c.total ? [h("dt", {}, "Сумма"), h("dd", {}, c.total)] : null,
+      c.prepay ? [h("dt", {}, "Олдиндан"), h("dd", {}, c.prepay + (c.paid ? " ✓ тўланган" : " кутилмоқда"))] : null,
+      c.details ? [h("dt", {}, "Тафсилот"), h("dd", {}, c.details)] : null,
+      c.question ? [h("dt", {}, "Савол"), h("dd", {}, h("strong", {}, "«" + c.question + "»"))] : null,
+      h("dt", {}, "Тил"), h("dd", {}, c.language)),
+    c.files.length ? h("div", { class: "files" }, c.files.map(f => f.has_file
+      ? h("button", { onclick: () => openFile(f.id, f.name) }, (f.kind === "audio" ? "🎤 " : f.kind === "photo" ? "🖼 " : "📎 ") + f.name)
+      : h("span", { class: "muted" }, f.name + " (юкланмаган)"))) : null,
+    !c.can_write && kind !== "results" && kind !== "new" ? h("p", { class: "muted" }, "Телефон мижози: қўнғироқ қилинг " + (c.phone || "")) : null,
+    actions.length ? h("div", { class: "row" }, actions) : null,
+    h("div", { class: "row spread" }, h("span", { class: "muted" }, "охирги хабар: " + ago(c.updated)),
+      h("button", { onclick: () => openLead(c.id) }, "Ёзишмани очиш")));
+}
+async function viewManager() {
+  const m = await getJSON("/manager");
+  const sections = [
+    ["questions", "Жавобсиз саволлар", "Агент билмаган савол. Жавобингиз мижозга боради ва агент уни эслаб қолади."],
+    ["results", "Паспорт натижасини юбориш", "Тақиқ бор бўлса, мижозга депорт хизмати таклиф қилинади."],
+    ["payments", "Олдиндан тўлов кутилмоқда", "Тўлов картага ёки Payme/Click'га тушгач, «Тўлов келди» ни босинг."],
+    ["handoff", "Менежер сўраган мижозлар", "Агент жим турибди: мижозга шу ердан ёзинг."],
+    ["new", "Охирги аризалар", ""],
+  ];
+  const urgent = m.questions.length + m.results.length + m.payments.length + m.handoff.length;
+  const badge = document.getElementById("mgr-badge"); badge.hidden = !urgent; badge.textContent = urgent;
+  return [h("div", {}, h("h1", {}, "Менежер"), h("p", { class: "sub" }, urgent ? `${urgent} та иш кутмоқда` : "Ҳамма иш бажарилган ✓")),
+    ...sections.map(([k, title, hint]) => h("section", { class: "card", style: "background:transparent;border:0;padding:0" },
+      h("div", { class: "row" }, h("h2", {}, title), m[k].length ? h("span", { class: "badge", style: k === "new" ? "background:var(--turq)" : "" }, m[k].length) : null),
+      hint ? h("p", { class: "muted", style: "margin:0" }, hint) : null,
+      m[k].length ? h("div", { class: "grid two" }, m[k].map(c => leadCard(c, k))) : h("p", { class: "empty" }, "Йўқ")))];
+}
+async function openLead(id) {
+  const d = await getJSON("/leads/" + id);
+  const dlg = document.getElementById("dlg");
+  dlg.replaceChildren(h("div", { class: "row spread" }, h("h2", {}, `#${d.id} ${d.who} · ${d.channel} · ${d.stage}`),
+      h("button", { onclick: () => dlg.close(), "aria-label": "Ёпиш" }, "✕")),
+    h("div", { class: "feed", style: "margin-top:10px" }, d.messages.map(m => h("div", { class: "msg " + m.direction },
+      h("span", { class: "meta" }, fmtTime(m.time) + " · " + (m.direction === "in" ? d.who : "агент")), m.text))));
+  dlg.showModal();
+}
+
+// ---------- routing and refresh
+const VIEWS = { connections: viewConnections, director: viewDirector, agent: viewAgent, manager: viewManager };
+async function route(silent) {
+  if (!token) return showLogin();
+  const tab = TABS.includes(location.hash.slice(1)) ? location.hash.slice(1) : "manager";
+  document.querySelectorAll("#tabs a").forEach(a => a.setAttribute("aria-current", a.getAttribute("href") === "#" + tab ? "page" : "false"));
+  // never wipe what the manager is typing
+  if (silent && [...document.querySelectorAll("textarea, input[type=text]")].some(t => t.value || t === document.activeElement)) return;
+  try {
+    const nodes = await VIEWS[tab]();
+    $main.replaceChildren(...nodes);
+    document.getElementById("stamp").textContent = "янгиланди " + new Date().toLocaleTimeString("ru-RU");
+  } catch (e) {
+    if (e.message !== "auth") $main.replaceChildren(h("div", { class: "card" }, h("h2", {}, "Маълумот олинмади"), h("p", { class: "muted" }, e.message)));
+    return;
+  }
+  clearInterval(timer); timer = setInterval(() => route(true), 20000);
+}
+window.addEventListener("hashchange", () => route());
+route();
+</script>
+</body>
+</html>

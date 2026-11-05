@@ -117,3 +117,4 @@ try {
 }
 Write-Host ""
 Write-Host "Tayyor. Holat: status.bat | To'xtatish: stop.bat | Jurnal: data\logs"
+Write-Host "Panel: http://127.0.0.1:8000/panel (kirish: .env dagi API_TOKEN)"

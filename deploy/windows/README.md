@@ -30,6 +30,7 @@ GitHub'да репозиторийни очинг ва `ccr-d5c74dc0-175va0` б�
 | `SALES_SHOP_NAME` | `Jihan Jan Jasur Nam Tour` | — |
 | `SALES_PAYMENT_CARD`, `SALES_USD_RATE` | олдиндан тўлов учун карта ва доллар курси | — |
 | `OPENAI_API_KEY` | ихтиёрий: ақллироқ жавоб ва овозли хабарлар | platform.openai.com |
+| `API_TOKEN` | панел пароли (`http://127.0.0.1:8000/panel`) | ўрнатувчи ўзи яратади ва экранда кўрсатади |
 
 **Шу билан Telegram ишлайди.** Мижозлар учун ботга ёзиб текшириб кўринг.
 

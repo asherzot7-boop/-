@@ -1,0 +1,131 @@
+"""Web panel: /panel (page) and /api/panel/* (data and actions, X-API-Token required).
+
+The API listens on 127.0.0.1 on the laptop and the Cloudflare tunnel exposes
+only /webhooks/, so the panel is reachable only from the laptop itself.
+"""
+from __future__ import annotations
+
+from pathlib import Path
+
+from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi.responses import FileResponse, HTMLResponse
+from pydantic import BaseModel, Field
+
+from app.api.routes import require_token
+from app.panel import service
+from app.salesbot.models import LeadFile
+from app.security import audit
+
+PAGE = Path(__file__).with_name("panel.html")
+
+page = APIRouter()
+panel = APIRouter(prefix="/api/panel", dependencies=[Depends(require_token)])
+
+
+@page.get("/panel", response_class=HTMLResponse)
+async def panel_page() -> HTMLResponse:
+    return HTMLResponse(PAGE.read_text(encoding="utf-8"), headers={"Cache-Control": "no-store"})
+
+
+def _sales(request: Request):
+    agent = getattr(request.app.state, "sales", None)
+    if agent is None:
+        raise HTTPException(503, "Сотув агенти ўчирилган")
+    return agent
+
+
+@panel.get("/connections")
+async def connections(request: Request) -> list[dict]:
+    async with request.app.state.session_factory() as s:
+        return await service.connections(s, request.app.state.settings)
+
+
+@panel.get("/director")
+async def director(request: Request, days: int = 30) -> dict:
+    async with request.app.state.session_factory() as s:
+        return await service.director(s, request.app.state.settings, max(1, min(days, 365)))
+
+
+@panel.get("/agent")
+async def agent_process(request: Request) -> dict:
+    async with request.app.state.session_factory() as s:
+        return await service.agent_process(s, request.app.state.settings)
+
+
+@panel.get("/manager")
+async def manager(request: Request) -> dict:
+    async with request.app.state.session_factory() as s:
+        return await service.manager(s, request.app.state.settings)
+
+
+@panel.get("/leads/{lead_id}")
+async def lead(request: Request, lead_id: int) -> dict:
+    async with request.app.state.session_factory() as s:
+        data = await service.lead_detail(s, request.app.state.settings, lead_id)
+    if data is None:
+        raise HTTPException(404, "Лид топилмади")
+    return data
+
+
+@panel.get("/files/{file_id}")
+async def file(request: Request, file_id: int):
+    async with request.app.state.session_factory() as s:
+        f = await s.get(LeadFile, file_id)
+    if f is None or not f.path:
+        raise HTTPException(404, "Файл йўқ")
+    path = Path(f.path).resolve()
+    root = Path(request.app.state.settings.sales_files_dir).resolve()
+    if not path.is_relative_to(root) or not path.exists():
+        raise HTTPException(404, "Файл йўқ")
+    return FileResponse(path, media_type=f.mime or None, filename=f.file_name, content_disposition_type="inline")
+
+
+class TextIn(BaseModel):
+    text: str = Field(min_length=1, max_length=2000)
+
+
+class ResultIn(BaseModel):
+    outcome: str
+    note: str = Field(default="", max_length=500)
+
+
+async def _audit(request: Request, action: str, lead_id: int, details: dict | None = None) -> None:
+    async with request.app.state.session_factory() as s:
+        await audit.log_action(s, action, None, "lead", lead_id, {"via": "panel", **(details or {})})
+        await s.commit()
+
+
+def _result(ok: bool, info: str) -> dict:
+    return {"ok": ok, "message": info}
+
+
+@panel.post("/leads/{lead_id}/reply")
+async def reply(request: Request, lead_id: int, body: TextIn) -> dict:
+    ok, info = await _sales(request).manager_reply(lead_id, body.text)
+    if ok:
+        await _audit(request, "lead.manager_reply", lead_id)
+    return _result(ok, info)
+
+
+@panel.post("/leads/{lead_id}/answer")
+async def answer(request: Request, lead_id: int, body: TextIn) -> dict:
+    ok, info = await _sales(request).manager_answer(lead_id, body.text)
+    if ok:
+        await _audit(request, "lead.answer", lead_id)
+    return _result(ok, info)
+
+
+@panel.post("/leads/{lead_id}/paid")
+async def paid(request: Request, lead_id: int) -> dict:
+    ok, info = await _sales(request).mark_paid(lead_id)
+    if ok:
+        await _audit(request, "lead.paid", lead_id)
+    return _result(ok, info)
+
+
+@panel.post("/leads/{lead_id}/result")
+async def result(request: Request, lead_id: int, body: ResultIn) -> dict:
+    ok, info = await _sales(request).send_result(lead_id, body.outcome, body.note)
+    if ok:
+        await _audit(request, "lead.result", lead_id, {"outcome": body.outcome})
+    return _result(ok, info)

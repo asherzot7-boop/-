@@ -453,6 +453,7 @@ class SalesAgent:
                 await s.flush()
                 target_id = new.id
                 text += "\n\n" + L.text(lg, "upsell", product=offer.title(lg), price=cat.price_text(offer, lg), extras=_offer_extras(offer, lg))
+            lead.extra = {**(lead.extra or {}), "result": outcome}
             channel, to, extra = lead.channel, lead.external_id, lead.extra
             await s.commit()
         if channel == "phone" or self.outbound is None or not self.outbound.can_send(channel):
@@ -798,8 +799,8 @@ _QWORDS = re.compile(
 
 def _real_question(text: str, e: Extracted) -> bool:
     """A question the funnel cannot answer: not a price, document, discount or yes/no message."""
-    if e.docs or e.discount or e.expensive or e.yes or e.no or e.phone:
-        return False
+    if e.docs or e.discount or e.expensive or e.yes or e.no or e.phone or e.price_question:
+        return False  # the funnel answers prices and documents itself
     if _QWORDS.search(text) or _QWORDS.search(L.normalize(text)):
         return True
     return "?" in text and not (e.price_question or e.product or e.buy or e.quantity)

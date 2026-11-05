@@ -111,5 +111,9 @@ def create_api(settings, session_factory, sales=None, meta_sender=None) -> FastA
     app.include_router(router)
     app.include_router(api)
     app.include_router(sales_router)
+    from app.panel.routes import page, panel
+
+    app.include_router(page)
+    app.include_router(panel)
     return app
 
