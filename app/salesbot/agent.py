@@ -304,6 +304,8 @@ class SalesAgent:
             await self._notify(note, route)
         if booked is not None:
             await self._calendar(booked)
+        if reply.won and self.settings.sales_send_documents:
+            await self.send_documents(reply.lead_id)
         if sheet_row:
             await self._sheets(sheet_row)
         return reply
@@ -745,6 +747,43 @@ class SalesAgent:
             await self._audit("file.purged", None, {"count": removed, "older_than_days": self.settings.sales_file_retention_days})
         return removed
 
+    # ------------------------------------------------------------ contract and invoice
+    async def build_documents(self, lead_id: int) -> dict[str, bytes]:
+        from app.salesbot import documents
+
+        async with self.sf() as s:
+            lead = await s.get(Lead, lead_id)
+            if lead is None:
+                return {}
+            products = await cat.load_catalog(s, self.settings.sales_catalog_path, self.settings.sales_catalog_from_books)
+            product = next((p for p in products if p.id == lead.product_id), None)
+            out = {}
+            inv = documents.invoice_pdf(lead, product, self.settings)
+            if inv:
+                out[f"hisob_{lead.id}.pdf"] = inv
+            con = documents.contract_pdf(lead, product, self.settings)
+            if con:
+                out[f"shartnoma_{lead.id}.pdf"] = con
+            return out
+
+    async def send_documents(self, lead_id: int) -> int:
+        """Invoice and contract to the client where the channel can carry files, else to the lead's manager."""
+        docs = await self.build_documents(lead_id)
+        if not docs:
+            return 0
+        async with self.sf() as s:
+            lead = await s.get(Lead, lead_id)
+            channel, to, extra, route = lead.channel, lead.external_id, lead.extra, self._route(lead)
+        sent = 0
+        for name, data in docs.items():
+            if self.outbound is not None and await self.outbound.send_document(channel, to, data, name, name, extra):
+                sent += 1
+                await self._log_out(lead_id, channel, f"[{name}]")
+            elif self.notifier is not None and hasattr(self.notifier, "send_file"):
+                for tid in route or await self._manager_ids():
+                    await self.notifier.send_file(tid, data, name, f"{name} — лид #{lead_id}: мижозга ўзингиз юборинг")
+        return sent
+
     # ------------------------------------------------------------ booking
     def _slot_label(self, at_utc, lang: str) -> str:
         from zoneinfo import ZoneInfo
@@ -1131,6 +1170,9 @@ class SalesAgent:
         if product and product.prepayment and lead.quantity:
             lead.prepayment_due, lead.currency = product.prepayment * lead.quantity, product.currency
             lead.payment_link = payments.payment_link(self.settings, lead.id, lead.prepayment_due, lead.currency)
+            uzs = payments.to_uzs(lead.prepayment_due, lead.currency, self.settings.sales_usd_rate)
+            if uzs:
+                lead.extra = {**(lead.extra or {}), "pay_uzs": uzs}   # the exact amount Payme/Click must charge
             pay = payments.payment_text(self.settings, lead.language, lead.id, lead.prepayment_due, lead.currency, lead.payment_link)
             if pay:
                 text += "\n\n" + pay

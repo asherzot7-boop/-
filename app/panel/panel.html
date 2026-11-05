@@ -282,9 +282,9 @@ async function act(btn, path, body, after) {
   catch (e) { if (e.message !== "auth") toast("Хато: " + e.message); }
   finally { btn.disabled = false; }
 }
-async function openFile(id, name) {
+async function openFile(id, name, path) {
   try {
-    const blob = await (await api("/files/" + id)).blob();
+    const blob = await (await api(path || "/files/" + id)).blob();
     const url = URL.createObjectURL(blob);
     const a = h("a", { href: url, target: "_blank", rel: "noopener", download: blob.type.startsWith("image/") || blob.type === "application/pdf" ? null : name });
     document.body.append(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 60000);
@@ -322,6 +322,9 @@ function leadCard(c, kind) {
     c.checklist && c.checklist.length ? h("div", { class: "files" }, c.checklist.map(d => h("button", {
       "aria-pressed": String(d.received), title: d.received ? "Олинди — бекор қилиш учун босинг" : "Олинмади — қўлда белгилаш",
       onclick: e => act(e.target, `/leads/${c.id}/docs`, { doc_id: d.id, received: !d.received }) }, (d.received ? "✅ " : "⬜ ") + d.name))) : null,
+    kind === "inwork" || kind === "payments" ? h("div", { class: "files" },
+      h("button", { onclick: () => openFile(0, `hisob_${c.id}.pdf`, `/leads/${c.id}/doc/invoice`) }, "🧾 Ҳисоб PDF"),
+      h("button", { onclick: () => openFile(0, `shartnoma_${c.id}.pdf`, `/leads/${c.id}/doc/contract`) }, "📄 Шартнома PDF")) : null,
     c.rating || c.referred_by ? h("p", { class: "muted", style: "margin:0" }, [c.rating ? `Баҳо: ${c.rating}/5` : "", c.referred_by ? ` Тавсия: #${c.referred_by}` : ""].join(" ")) : null,
     c.files.length ? h("div", { class: "files" }, c.files.map(f => f.has_file
       ? h("button", { onclick: () => openFile(f.id, f.name) }, (f.kind === "audio" ? "🎤 " : f.kind === "photo" ? "🖼 " : "📎 ") + f.name)

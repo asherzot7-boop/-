@@ -236,7 +236,7 @@ async def test_visa_service_with_documents(services):
     assert "qaysi shahrida" in r[4].text  # the service's own question replaces "delivery address"
     assert "2 kishi — 300 $ dan" in r[5].text
     assert r[6].done and "Arizangiz" in r[6].text
-    card = services.notifier.sent[-1][1]
+    card = next(t for _, t in services.notifier.sent if "Янги ариза" in t)
     assert "Янги ариза" in card and "Тафсилот: Istanbul, yanvardan" in card
 
 
@@ -275,7 +275,7 @@ async def test_deport_offer_with_prepayment(company):
     assert "2 600 $" in r[1].text and "Oldindan to'lov: 600 $" in r[1].text  # "3 yillik" is a duration, not 3 people
     assert "1 kishi — 2 600 $ (oldindan to'lov 600 $)" in r[4].text
     assert r[5].done
-    assert "Олдиндан тўлов: 600 $" in company.notifier.sent[-1][1]
+    assert any("Олдиндан тўлов: 600 $" in t for _, t in company.notifier.sent)
 
 
 async def test_passport_check_and_employer_documents(company):

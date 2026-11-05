@@ -1,0 +1,31 @@
+XIZMAT KO'RSATISH SHARTNOMASI № {number}
+(NAMUNA — imzolashdan oldin yurist tekshirishi kerak)
+
+{city}, {date}
+
+{company} (keyingi o'rinlarda «Ijrochi») bir tomondan va {client} (telefon: {phone}) (keyingi o'rinlarda «Buyurtmachi») ikkinchi tomondan quyidagilar to'g'risida ushbu shartnomani tuzdilar:
+
+1. SHARTNOMA PREDMETI
+1.1. Ijrochi Buyurtmachiga quyidagi xizmatni ko'rsatadi: {service}, {qty} kishi uchun.
+1.2. Qo'shimcha ma'lumot: {details}.
+
+2. NARX VA TO'LOV TARTIBI
+2.1. Xizmatning umumiy narxi: {total}.
+2.2. Oldindan to'lov: {prepayment}. Qolgan summa xizmat yakunida to'lanadi.
+2.3. To'lov naqd pulsiz, karta yoki Payme/Click orqali amalga oshiriladi.
+
+3. TOMONLARNING MAJBURIYATLARI
+3.1. Ijrochi hujjatlarni to'g'ri tayyorlaydi va jarayonni oxirigacha kuzatib boradi.
+3.2. Buyurtmachi kerakli hujjatlarni o'z vaqtida va to'liq taqdim etadi.
+3.3. Yakuniy qarorni tegishli davlat organlari qabul qiladi; Ijrochi natijani kafolatlamaydi.
+
+4. SHAXSIY MA'LUMOTLAR
+4.1. Buyurtmachining hujjatlari faqat ushbu xizmat uchun ishlatiladi, shifrlangan holda saqlanadi va xizmat tugagandan keyin belgilangan muddatda o'chiriladi.
+
+5. TOMONLARNING REKVIZITLARI
+Ijrochi: {company}
+{company_details}
+
+Buyurtmachi: {client}, {phone}
+
+Ijrochi: ______________            Buyurtmachi: ______________

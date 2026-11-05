@@ -72,7 +72,7 @@ async def test_prepayment_instructions_after_confirmation(full):
     async with full.sf() as s:
         lead = await s.get(Lead, 1)
         assert (lead.prepayment_due, lead.currency) == (600, "USD")
-    assert "/paid 1" in full.notifier.sent[-1][1]
+    assert any("/paid 1" in t for _, t in full.notifier.sent)
 
 
 def test_payme_and_click_links():

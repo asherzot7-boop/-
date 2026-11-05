@@ -110,3 +110,20 @@ class FaqEntry(TimestampMixin, Base):
     language: Mapped[str] = mapped_column(String(8), nullable=False)
     uses: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+
+
+class PaymentTx(TimestampMixin, Base):
+    """A Payme or Click transaction for a lead's advance payment (merchant API state machine)."""
+
+    __tablename__ = "payment_transactions"
+    __table_args__ = (UniqueConstraint("provider", "external_id", name="uq_payment_tx_external"),)
+
+    provider: Mapped[str] = mapped_column(String(10), nullable=False)       # payme / click
+    external_id: Mapped[str] = mapped_column(String(64), nullable=False)    # Payme transaction id / Click click_trans_id
+    lead_id: Mapped[int] = mapped_column(ForeignKey("leads.id"), nullable=False, index=True)
+    amount: Mapped[int] = mapped_column(BigInteger, nullable=False)         # Payme: tiyin, Click: so'm
+    state: Mapped[int] = mapped_column(Integer, nullable=False)             # Payme: 1 created, 2 performed, -1/-2 cancelled
+    create_time: Mapped[int] = mapped_column(BigInteger, nullable=False)    # ms since epoch, as the provider expects
+    perform_time: Mapped[int] = mapped_column(BigInteger, default=0, nullable=False)
+    cancel_time: Mapped[int] = mapped_column(BigInteger, default=0, nullable=False)
+    reason: Mapped[int | None] = mapped_column(Integer)

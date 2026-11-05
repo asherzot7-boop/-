@@ -33,6 +33,22 @@ class TelegramSender:
             log.warning("Telegram'га юборилмади (%s): %s", recipient, type(exc).__name__)
             return False
 
+    async def send_document(self, channel: str, recipient: str, data: bytes, filename: str, caption: str, extra: dict | None = None) -> bool:
+        from aiogram.types import BufferedInputFile
+
+        kwargs = {}
+        if channel == "telegram_business":
+            bc = (extra or {}).get("business_connection_id")
+            if not bc:
+                return False
+            kwargs["business_connection_id"] = bc
+        try:
+            await self.bot.send_document(int(recipient), BufferedInputFile(data, filename=filename), caption=caption[:1000], **kwargs)
+            return True
+        except Exception as exc:
+            log.warning("Telegram'га ҳужжат юборилмади (%s): %s", recipient, type(exc).__name__)
+            return False
+
 
 class MetaChannelSender:
     def __init__(self, meta_sender) -> None:
@@ -43,6 +59,11 @@ class MetaChannelSender:
 
     async def send_template(self, channel: str, recipient: str, name: str, lang: str) -> bool:
         return await self.meta.send_template(recipient, name, lang)
+
+    async def send_document(self, channel: str, recipient: str, data: bytes, filename: str, caption: str, extra: dict | None = None) -> bool:
+        if channel != "whatsapp":
+            return False  # Instagram/Messenger: managers forward files themselves
+        return await self.meta.send_document(recipient, data, filename, caption)
 
 
 class WebSender:
@@ -68,6 +89,10 @@ class Outbound:
         if sender is None:
             return False
         return await sender.send(channel, recipient, text, extra)
+
+    async def send_document(self, channel: str, recipient: str, data: bytes, filename: str, caption: str, extra: dict | None = None) -> bool:
+        fn = getattr(self._senders.get(channel), "send_document", None)
+        return bool(fn and await fn(channel, recipient, data, filename, caption, extra))
 
     async def send_template(self, channel: str, recipient: str, name: str, lang: str) -> bool:
         sender = self._senders.get(channel)

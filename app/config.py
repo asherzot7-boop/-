@@ -117,6 +117,19 @@ class Settings(BaseSettings):
     sales_routing: dict = Field(default_factory=dict)
     # No manager answer to a hand-off / open question in this many minutes -> directors are alerted
     sales_sla_minutes: int = 15
+    # Company details for the contract and invoice PDFs
+    sales_company_name: str = "JIHAN JAN JASUR NAM TOUR MCHJ"
+    sales_company_city: str = "Toshkent"
+    sales_company_inn: str | None = None
+    sales_company_address: str | None = None
+    sales_company_bank: str | None = None
+    sales_company_phone: str | None = None
+    sales_contract_template: str = "sales_contract_template.txt"
+    sales_pdf_font: str | None = None
+    sales_send_documents: bool = True   # send the invoice and contract to the client after confirmation (Telegram, WhatsApp)
+    # Payme Merchant API (/webhooks/payme) and Click SHOP API (/webhooks/click/*): automatic payment confirmation
+    payme_key: SecretStr | None = None
+    click_secret_key: SecretStr | None = None
     # Knowledge base: curated answers (JSON) + answers managers gave with /answer
     sales_faq_path: str | None = "sales_faq.json"
     # Instagram comments: intent (reply to questions/prices only) | all | off
@@ -143,7 +156,7 @@ class Settings(BaseSettings):
         out = []
         for s in (self.bot_token, self.openai_api_key, self.api_token, self.sales_bot_token, self.meta_verify_token, self.meta_app_secret,
                   self.instagram_access_token, self.messenger_page_token, self.whatsapp_access_token, self.twilio_auth_token,
-                  self.sales_sheets_webhook_url, self.sales_files_key, self.sales_calendar_webhook_url):
+                  self.sales_sheets_webhook_url, self.sales_files_key, self.sales_calendar_webhook_url, self.payme_key, self.click_secret_key):
             if s is not None and s.get_secret_value():
                 out.append(s.get_secret_value())
         return out

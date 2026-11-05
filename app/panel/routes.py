@@ -161,6 +161,17 @@ async def docs(request: Request, lead_id: int, body: DocIn) -> dict:
     return _result(ok, info)
 
 
+@panel.get("/leads/{lead_id}/doc/{kind}")
+async def lead_pdf(request: Request, lead_id: int, kind: str):
+    if kind not in ("invoice", "contract"):
+        raise HTTPException(404, "Ҳужжат йўқ")
+    docs = await _sales(request).build_documents(lead_id)
+    name = f"{'hisob' if kind == 'invoice' else 'shartnoma'}_{lead_id}.pdf"
+    if name not in docs:
+        raise HTTPException(404, "PDF тузилмади (шрифт ёки шаблон йўқ)")
+    return Response(docs[name], media_type="application/pdf", headers={"Content-Disposition": f'inline; filename="{name}"'})
+
+
 @panel.post("/leads/{lead_id}/result")
 async def result(request: Request, lead_id: int, body: ResultIn) -> dict:
     ok, info = await _sales(request).send_result(lead_id, body.outcome, body.note)
