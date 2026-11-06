@@ -6,6 +6,27 @@
 - **Технологиялар:** Python 3.12+, aiogram 3, FastAPI, SQLAlchemy 2, Alembic, PostgreSQL ёки SQLite, OpenAI (ихтиёрий), Docker.
 - **Калитсиз ҳам ишлайди.** `BOT_TOKEN` бўлмаса, тизим demo режимга ўтади ва консолдан синалади. `OPENAI_API_KEY` бўлмаса, агентлар қоидалар асосида ишлайди.
 
+## Nam Tour: ҳаммаси битта лойиҳада
+
+JIHAN JAN JASUR NAM TOUR MCHJ учун сотув агенти шу репозиторийда тўлиқ йиғилган: код, каталог, визуал схемалар ва буйруқлар.
+
+| Нима | Қаерда |
+|---|---|
+| Агент (воронка, тиллар, тўлов, ҳужжатлар) | `app/salesbot/` |
+| Хизматлар ва нархлар | `sales_catalog.json`, `sales_faq.json` |
+| Веб-панел (уланишлар, раҳбар, агент, менежер) | `app/panel/` → `http://127.0.0.1:8000/panel` |
+| Визуал схемалар ва барча буйруқлар | `visual/` → `http://127.0.0.1:8000/visual/` |
+| Windows ноутбук учун ўрнатиш | `deploy/windows/` |
+| Тестлар | `tests/` |
+
+Визуал саҳифалар: `index.html` (бош саҳифа ва буйруқлар рўйхати), `journeys-3d.html` (учта хизмат 3D'да), `journeys.html` (ҳар бир хизмат қадамма-қадам), `agent.html` (агент тузилмаси), `agent-3d-variants.html` (10 та 3D кўриниш), `hologram.html`. «Учта хизмат» саҳифалари ҳақиқий агент суҳбатларидан йиғилади:
+
+```bash
+python -m app.main visual   # visual/journeys*.html ни қайта йиғади (калит ва база керак эмас)
+```
+
+Windows'да `deploy\windows\visual.bat` шу саҳифани браузерда очади (агент ишлаётганда).
+
 ## Тез бошлаш (маҳаллий, калитсиз)
 
 ```bash
@@ -332,7 +353,7 @@ TEST_DATABASE_URL=postgresql+asyncpg://user@host:5432/testdb pytest -q      # Po
 
 ```
 app/
-  main.py            ягона кириш нуқтаси: run | demo | migrate | seed
+  main.py            ягона кириш нуқтаси: run | demo | migrate | seed | sales | backup | eval | visual
   config.py          .env созламалари
   logging_setup.py   махфий маълумотларни яширувчи лог фильтри
   notify.py          Telegram ёки консолга хабар юбориш
@@ -343,7 +364,11 @@ app/
   security/          permissions.py, audit.py
   api/routes.py      /health, /api/kpi, /api/tasks, /api/books, /api/approvals, /api/leads
   salesbot/          мижозлар учун сотув агенти: agent.py (воронка, AI), lang.py (тиллар), catalog.py,
-                     channels/ (meta: Instagram/WhatsApp/Messenger, telegram, voice: Twilio), routes.py (webhook'лар)
+                     channels/ (meta: Instagram/WhatsApp/Messenger, telegram, voice: Twilio), routes.py (webhook'лар),
+                     journeys.py (визуал саҳифалар учун демо суҳбатлар)
+  panel/             /panel веб-панели ва /visual/ саҳифалари
+visual/              3D ва 2D схемалар, index.html (буйруқлар), templates/ (journeys шаблонлари)
+deploy/windows/      install/status/stop/visual/uninstall.bat
 tests/
 ```
 

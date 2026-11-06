@@ -1,0 +1,195 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Как работает агент Nam Tour</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Unbounded:wght@500;700&family=Golos+Text:wght@400;500;600&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: service tabs, a phase strip, then one conversation column where client, agent, manager and system
+   events read like a real chat log. Palette: Iznik cobalt, turquoise, saffron. */
+:root {
+  --bg: #EEF2F6; --card: #FFFFFF; --fg: #142030; --muted: #5A6A80; --line: #D3DCE7;
+  --cobalt: #1D4E9E; --turq: #0F8A87; --saffron: #B87A12; --violet: #6A4BC4;
+  --client: #1D4E9E; --client-fg: #FFFFFF; --agent: #FFFFFF; --mgr-bg: #F4EEFF; --push-bg: #E3F4F2; --sys-fg: #5A6A80;
+  --font-display: "Unbounded", "Segoe UI", system-ui, sans-serif;
+  --font-body: "Golos Text", "Segoe UI", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) { --bg: #0D1420; --card: #142033; --fg: #E6ECF3; --muted: #9AA9BD; --line: #26354A;
+    --cobalt: #7FA6EE; --turq: #45C9C3; --saffron: #E6B04F; --violet: #A88BF2;
+    --client: #2B5DB8; --client-fg: #FFFFFF; --agent: #18263B; --mgr-bg: #231B3A; --push-bg: #12302F; --sys-fg: #9AA9BD; color-scheme: dark; }
+}
+:root[data-theme="dark"] { --bg: #0D1420; --card: #142033; --fg: #E6ECF3; --muted: #9AA9BD; --line: #26354A;
+  --cobalt: #7FA6EE; --turq: #45C9C3; --saffron: #E6B04F; --violet: #A88BF2;
+  --client: #2B5DB8; --client-fg: #FFFFFF; --agent: #18263B; --mgr-bg: #231B3A; --push-bg: #12302F; --sys-fg: #9AA9BD; color-scheme: dark; }
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--fg); font-family: var(--font-body); font-size: 15px; line-height: 1.5;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 24px 64px; }
+.wrap { max-width: 1060px; margin: 0 auto; display: flex; flex-direction: column; gap: 20px; }
+h1 { font-family: var(--font-display); font-weight: 700; font-size: clamp(1.35rem, 3.6vw, 2.1rem); margin: 0; text-wrap: balance; }
+h2 { font-family: var(--font-display); font-weight: 500; font-size: 1.05rem; margin: 0; }
+.lede { color: var(--muted); margin: 0; max-width: 66ch; }
+.tabs { display: flex; gap: 8px; flex-wrap: wrap; }
+.tab { font: 600 0.92rem var(--font-body); color: var(--muted); background: var(--card); border: 1px solid var(--line); border-radius: 12px;
+  padding: 10px 14px; cursor: pointer; text-align: left; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.tab small { font-weight: 400; font-size: 0.78rem; }
+.tab[aria-selected="true"] { color: var(--fg); border-color: var(--turq); box-shadow: inset 0 0 0 1px var(--turq); }
+.tab:focus-visible, button:focus-visible { outline: 2px solid var(--saffron); outline-offset: 2px; }
+.grid { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 18px; align-items: start; }
+.side { position: sticky; top: 16px; display: flex; flex-direction: column; gap: 12px; }
+.panel { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 16px; display: flex; flex-direction: column; gap: 10px; }
+.legend { display: grid; gap: 8px; font-size: 0.85rem; }
+.legend span { display: flex; align-items: center; gap: 8px; }
+.dot { width: 12px; height: 12px; border-radius: 4px; flex: 0 0 12px; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip { font: 600 0.72rem var(--font-mono); padding: 4px 8px; border-radius: 6px; background: var(--push-bg); color: var(--turq); cursor: pointer; border: 0; }
+.chip[aria-pressed="true"] { background: var(--turq); color: var(--card); }
+.controls { display: flex; gap: 8px; flex-wrap: wrap; }
+.btn { font: 600 0.85rem var(--font-body); border: 1px solid var(--line); background: var(--card); color: var(--fg); border-radius: 10px; padding: 8px 12px; cursor: pointer; }
+.btn.primary { background: var(--cobalt); border-color: var(--cobalt); color: #fff; }
+.log { display: flex; flex-direction: column; gap: 8px; background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 16px; }
+.ev { display: flex; flex-direction: column; gap: 3px; max-width: 86%; transition: opacity .25s, transform .25s; }
+.ev.hidden { display: none; }
+.ev.dim { opacity: .28; }
+.who { font: 600 0.7rem var(--font-mono); letter-spacing: .06em; text-transform: uppercase; color: var(--muted); display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.who .t { font-family: var(--font-mono); text-transform: none; letter-spacing: 0; color: var(--turq); background: var(--push-bg); padding: 1px 6px; border-radius: 5px; }
+.bubble { padding: 10px 13px; border-radius: 14px; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 0.93rem; }
+.client { align-self: flex-end; align-items: flex-end; }
+.client .bubble { background: var(--client); color: var(--client-fg); border-bottom-right-radius: 4px; }
+.agent .bubble { background: var(--agent); border: 1px solid var(--line); border-bottom-left-radius: 4px; }
+.push .bubble { background: var(--push-bg); border: 1px solid transparent; }
+.file .bubble { font-family: var(--font-mono); font-size: 0.82rem; }
+.mgr { align-self: stretch; max-width: 100%; }
+.mgr .bubble { background: var(--mgr-bg); border-left: 3px solid var(--violet); border-radius: 8px; font-size: 0.86rem; }
+.cmd .bubble { font-family: var(--font-mono); background: var(--fg); color: var(--bg); border-radius: 8px; align-self: flex-start; }
+.cmd { align-self: flex-start; }
+.sys { align-self: center; max-width: 100%; text-align: center; }
+.sys .bubble { background: transparent; color: var(--sys-fg); font-size: 0.82rem; border-top: 1px dashed var(--line); border-bottom: 1px dashed var(--line); border-radius: 0; padding: 6px 4px; }
+.note { color: var(--muted); font-size: 0.85rem; }
+@media (max-width: 860px) {
+  .grid { grid-template-columns: minmax(0, 1fr); }
+  .side { position: static; order: -1; }
+  .ev { max-width: 94%; }
+}
+@media (prefers-reduced-motion: reduce) { .ev { transition: none; } }
+</style>
+
+<div class="wrap">
+  <header style="display:flex;flex-direction:column;gap:8px">
+    <h1>Как работает агент: три клиента от первого сообщения до результата</h1>
+    <p class="lede">Это не макет. Все ответы ниже выдал настоящий код агента: я провёл через него трёх клиентов и сохранил каждое сообщение, каждую карточку менеджеру и каждое системное событие. Имена и телефоны клиентов вымышлены.</p>
+  </header>
+  <div class="tabs" role="tablist" id="tabs"></div>
+  <div class="grid">
+    <div style="display:flex;flex-direction:column;gap:10px;min-width:0">
+      <div class="controls">
+        <button class="btn primary" id="play">▶ Проиграть по шагам</button>
+        <button class="btn" id="all">Показать всё</button>
+        <span class="note" id="count" style="align-self:center"></span>
+      </div>
+      <div class="log" id="log" aria-live="polite"></div>
+    </div>
+    <aside class="side">
+      <section class="panel" id="about"></section>
+      <section class="panel">
+        <h2>Кто есть кто</h2>
+        <div class="legend">
+          <span><i class="dot" style="background:var(--client)"></i>Клиент пишет</span>
+          <span><i class="dot" style="background:var(--agent);border:1px solid var(--line)"></i>Агент отвечает</span>
+          <span><i class="dot" style="background:var(--push-bg)"></i>Агент пишет сам: уведомление, напоминание, документ</span>
+          <span><i class="dot" style="background:var(--fg)"></i>Менеджер вводит команду</span>
+          <span><i class="dot" style="background:var(--mgr-bg);border-left:3px solid var(--violet)"></i>Менеджеру приходит в Telegram</span>
+          <span><i class="dot" style="border:1px dashed var(--line)"></i>Что происходит в системе</span>
+        </div>
+      </section>
+      <section class="panel">
+        <h2>Функции в этом сценарии</h2>
+        <p class="note" style="margin:0">Нажмите, чтобы подсветить шаги.</p>
+        <div class="chips" id="chips"></div>
+      </section>
+    </aside>
+  </div>
+</div>
+
+<script>
+"use strict";
+const DATA = {"passport": [{"who": "system", "text": "Клиент нашёл бота по ссылке из Instagram-профиля (t.me/…?start=ig_bio) — источник сохранён", "kind": "sys", "tag": "Источник рекламы"}, {"who": "client", "text": "/start", "kind": "msg", "tag": null}, {"who": "agent", "text": "Assalomu alaykum! 😊 Men Jihan Jan Jasur Nam Tour yordamchisiman. Sizni nima qiziqtiradi? Bizda:\n• Pasportni tekshirish (sorgulama) — 80 $\n• Deportni olib tashlash (1 yildan 5 yilgacha) — 2 600 $\n• Turkiyada ishlash uchun hujjatlar (ish beruvchi orqali) — 800 $", "kind": "msg", "tag": null}, {"who": "client", "text": "Pasportimni tekshirish kerak, Turkiyaga kira olamanmi?", "kind": "msg", "tag": null}, {"who": "agent", "text": "Pasport tekshiruvi (sorgulama) natijasi 12 soat ichida chiqadi.\n\nPasportni tekshirish (sorgulama) — 80 $. Pasportingiz bo'yicha Turkiyaga kirishda taqiq yoki cheklov bor-yo'qligini tekshiramiz. Natija: 12 soat ichida.\nNecha kishi uchun?", "kind": "msg", "tag": "База знаний"}, {"who": "client", "text": "1", "kind": "msg", "tag": null}, {"who": "agent", "text": "Ajoyib! Arizani rasmiylashtiramiz: ismingiz nima?", "kind": "msg", "tag": null}, {"who": "client", "text": "Ismim Anvar", "kind": "msg", "tag": null}, {"who": "agent", "text": "Rahmat, Anvar! Telefon raqamingizni yozing (masalan: +998 90 123 45 67).", "kind": "msg", "tag": null}, {"who": "client", "text": "+998 90 555 12 34", "kind": "msg", "tag": null}, {"who": "agent", "text": "Natija qachon kerak va qaysi davlat pasporti?", "kind": "msg", "tag": null}, {"who": "client", "text": "Iloji boricha tezroq, O'zbekiston pasporti", "kind": "msg", "tag": null}, {"who": "agent", "text": "Arizangizni tekshiring:\n• Pasportni tekshirish (sorgulama), 1 kishi — 80 $\n• Anvar, +998905551234\n• Iloji boricha tezroq, O'zbekiston pasporti\nHammasi to'g'rimi? «Ha» deb yozing yoki nimani o'zgartirishni ayting.", "kind": "msg", "tag": "Подтверждение"}, {"who": "client", "text": "pasport.jpg", "kind": "file", "tag": null}, {"who": "agent", "text": "Hujjatlaringizni faqat arizangizni rasmiylashtirish uchun shifrlangan holda saqlaymiz va xizmat tugagach 90 kundan keyin o'chiramiz. Rozimisiz? «Roziman» deb yozing, keyin hujjatni qayta yuboring.", "kind": "msg", "tag": "Согласие"}, {"who": "client", "text": "Roziman", "kind": "msg", "tag": "Согласие"}, {"who": "agent", "text": "Rahmat! Endi hujjatni qayta yuboring.", "kind": "msg", "tag": null}, {"who": "client", "text": "pasport.jpg", "kind": "file", "tag": null}, {"who": "manager_in", "text": "🖼 Расм — лид #1 (Telegram, Anvar)\npasport.jpg\n📎 pasport.jpg", "kind": "card", "tag": null}, {"who": "agent", "text": "Hujjat qabul qilindi ✅ (jami 1 ta). Konsultantimiz ko'rib chiqadi.\nBarcha hujjatlar qabul qilindi ✅", "kind": "msg", "tag": "Чек-лист документов"}, {"who": "client", "text": "ha", "kind": "msg", "tag": null}, {"who": "manager_in", "text": "✅ Янги ариза — лид #1\nКанал: Telegram (tg-anvar)\nТил: uz\nМижоз: Anvar\nТелефон: +998905551234\nХизмат: Pasportni tekshirish (sorgulama) × 1 = 80 $\nТафсилот: Iloji boricha tezroq, O'zbekiston pasporti\nЁзишма: /lead 1 · Жавоб: /reply 1 матн", "kind": "card", "tag": "Карточка менеджеру"}, {"who": "agent", "text": "hisob_1.pdf", "kind": "file", "tag": "Договор и счёт PDF"}, {"who": "agent", "text": "shartnoma_1.pdf", "kind": "file", "tag": "Договор и счёт PDF"}, {"who": "agent", "text": "Rahmat! Arizangiz №1 qabul qilindi ✅ Konsultantimiz tez orada bog'lanib, hujjatlar ro'yxati va keyingi qadamlarni aytadi.", "kind": "msg", "tag": null}, {"who": "system", "text": "12 соатдан кейин менежер натижани текширди: тақиқ бор", "kind": "sys", "tag": null}, {"who": "manager", "text": "/result 1 ban 2024-yil, 3 yilga", "kind": "cmd", "tag": "Команда менеджера"}, {"who": "agent", "text": "Pasportingiz tekshirildi: Turkiyaga kirishda taqiq (deport) bor. 2024-yil, 3 yilga\n\nBizda «Deportni olib tashlash (1 yildan 5 yilgacha)» xizmati bor — 2 600 $. Oldindan to'lov: 600 $.\nRasmiylashtiramizmi? «Ha» deb yozing.", "kind": "push", "tag": "Допродажа"}, {"who": "manager_in", "text": "Натижа юборилди ✅ Таклиф: «Deportni olib tashlash (1 yildan 5 yilgacha)» (янги лид #2).", "kind": "card", "tag": null}, {"who": "client", "text": "ha", "kind": "msg", "tag": null}, {"who": "agent", "text": "Deport qachon va necha yilga qo'yilgan (1–5 yil)?", "kind": "msg", "tag": null}, {"who": "client", "text": "2024-yil iyul, 3 yilga", "kind": "msg", "tag": null}, {"who": "agent", "text": "Arizangizni tekshiring:\n• Deportni olib tashlash (1 yildan 5 yilgacha), 1 kishi — 2 600 $ (oldindan to'lov 600 $)\n• Anvar, +998905551234\n• 2024-yil iyul, 3 yilga\nHammasi to'g'rimi? «Ha» deb yozing yoki nimani o'zgartirishni ayting.", "kind": "msg", "tag": "Подтверждение"}, {"who": "client", "text": "ha", "kind": "msg", "tag": null}, {"who": "manager_in", "text": "✅ Янги ариза — лид #2\nКанал: Telegram (tg-anvar)\nТил: uz\nМижоз: Anvar\nТелефон: +998905551234\nХизмат: Deportni olib tashlash (1 yildan 5 yilgacha) × 1 = 2 600 $\nТафсилот: 2024-yil iyul, 3 yilga\nОлдиндан тўлов: 600 $\nТўлов ҳаволаси: https://checkout.paycom.uz/bT1OQU1UT1VSO2FjLm9yZGVyX2lkPTI7YT03NjgwMDAwMDA=\nЁзишма: /lead 2 · Жавоб: /reply 2 матн · Тўланди: /paid 2", "kind": "card", "tag": "Карточка менеджеру"}, {"who": "agent", "text": "hisob_2.pdf", "kind": "file", "tag": "Договор и счёт PDF"}, {"who": "agent", "text": "shartnoma_2.pdf", "kind": "file", "tag": "Договор и счёт PDF"}, {"who": "agent", "text": "Rahmat! Arizangiz №2 qabul qilindi ✅ Konsultantimiz tez orada bog'lanib, hujjatlar ro'yxati va keyingi qadamlarni aytadi.\n\nTo'lov: 600 $ (≈ 7 680 000 so'm).\nTo'lash uchun havola: https://checkout.paycom.uz/bT1OQU1UT1VSO2FjLm9yZGVyX2lkPTI7YT03NjgwMDAwMDA=\nTo'lovdan keyin konsultantimiz ishni boshlaydi.\n\nHujjatlarni yuborishdan oldin: ularni faqat arizangiz uchun shifrlangan holda saqlaymiz va xizmat tugagach 90 kundan keyin o'chiramiz. Rozimisiz? «Roziman» deb yozing.\n\nQabul qilingan: —\nQoldi: Pasport rasmi", "kind": "msg", "tag": "Согласие"}], "deport": [{"who": "system", "text": "Клиент нажал на рекламу «Deportni olib tashlash» в Instagram — источник: реклама", "kind": "sys", "tag": "Источник рекламы"}, {"who": "client", "text": "Assalomu alaykum, deportim bor 2 yillik. Narxi qancha?", "kind": "msg", "tag": null}, {"who": "agent", "text": "Deportni olib tashlash (1 yildan 5 yilgacha) — 2 600 $. Turkiyaga kirish taqig'i (deport) 1 yildan 5 yilgacha bo'lsa, uni olib tashlash bo'yicha ish olib boramiz. Oldindan to'lov: 600 $.\n\nAjoyib! Arizani rasmiylashtiramiz: ismingiz nima?", "kind": "msg", "tag": null}, {"who": "client", "text": "Kafolat berasizmi?", "kind": "msg", "tag": null}, {"who": "agent", "text": "Yakuniy qarorni Turkiya davlat organlari qabul qiladi, shuning uchun hech kim 100% kafolat bera olmaydi. Biz hujjatlarni to'g'ri tayyorlab, jarayonni oxirigacha kuzatib boramiz.\n\nAjoyib! Arizani rasmiylashtiramiz: ismingiz nima?", "kind": "msg", "tag": "Без обещаний гарантий"}, {"who": "client", "text": "Ismim Dilnoza", "kind": "msg", "tag": null}, {"who": "agent", "text": "Rahmat, Dilnoza! Telefon raqamingizni yozing (masalan: +998 90 123 45 67).", "kind": "msg", "tag": null}, {"who": "client", "text": "+998 93 777 88 99", "kind": "msg", "tag": null}, {"who": "agent", "text": "Deport qachon va necha yilga qo'yilgan (1–5 yil)?", "kind": "msg", "tag": null}, {"who": "client", "text": "2025-yil yanvar, 2 yilga", "kind": "msg", "tag": null}, {"who": "agent", "text": "Arizangizni tekshiring:\n• Deportni olib tashlash (1 yildan 5 yilgacha), 1 kishi — 2 600 $ (oldindan to'lov 600 $)\n• Dilnoza, +998937778899\n• 2025-yil yanvar, 2 yilga\nHammasi to'g'rimi? «Ha» deb yozing yoki nimani o'zgartirishni ayting.", "kind": "msg", "tag": "Подтверждение"}, {"who": "client", "text": "ha", "kind": "msg", "tag": null}, {"who": "manager_in", "text": "✅ Янги ариза — лид #3\nКанал: Instagram (ig-dilnoza)\nТил: uz\nМижоз: Dilnoza\nТелефон: +998937778899\nХизмат: Deportni olib tashlash (1 yildan 5 yilgacha) × 1 = 2 600 $\nТафсилот: 2025-yil yanvar, 2 yilga\nОлдиндан тўлов: 600 $\nТўлов ҳаволаси: https://checkout.paycom.uz/bT1OQU1UT1VSO2FjLm9yZGVyX2lkPTM7YT03NjgwMDAwMDA=\nЁзишма: /lead 3 · Жавоб: /reply 3 матн · Тўланди: /paid 3", "kind": "card", "tag": "Карточка менеджеру"}, {"who": "agent", "text": "hisob_3.pdf", "kind": "file", "tag": "Договор и счёт PDF"}, {"who": "agent", "text": "shartnoma_3.pdf", "kind": "file", "tag": "Договор и счёт PDF"}, {"who": "agent", "text": "Rahmat! Arizangiz №3 qabul qilindi ✅ Konsultantimiz tez orada bog'lanib, hujjatlar ro'yxati va keyingi qadamlarni aytadi.\n\nTo'lov: 600 $ (≈ 7 680 000 so'm).\nTo'lash uchun havola: https://checkout.paycom.uz/bT1OQU1UT1VSO2FjLm9yZGVyX2lkPTM7YT03NjgwMDAwMDA=\nTo'lovdan keyin konsultantimiz ishni boshlaydi.\n\nHujjatlarni yuborishdan oldin: ularni faqat arizangiz uchun shifrlangan holda saqlaymiz va xizmat tugagach 90 kundan keyin o'chiramiz. Rozimisiz? «Roziman» deb yozing.\n\nQabul qilingan: —\nQoldi: Pasport rasmi", "kind": "msg", "tag": "Согласие"}, {"who": "system", "text": "Клиент оплатил 600 $ ≈ 7 680 000 сўм по ссылке Payme", "kind": "sys", "tag": "Payme"}, {"who": "system", "text": "Payme → CheckPerformTransaction: ✓ {\"allow\": true}", "kind": "sys", "tag": "Payme"}, {"who": "system", "text": "Payme → CreateTransaction: ✓ {\"create_time\": 1793942701822, \"transaction\": \"1\", \"state\": ", "kind": "sys", "tag": "Payme"}, {"who": "agent", "text": "To'lovingiz qabul qilindi ✅ Ishni boshladik, natija haqida shu yerda xabar beramiz.", "kind": "push", "tag": "Payme"}, {"who": "system", "text": "Payme → PerformTransaction: ✓ {\"transaction\": \"1\", \"perform_time\": 1793942701895, \"state\":", "kind": "sys", "tag": "Payme"}, {"who": "manager", "text": "/status 3 2", "kind": "cmd", "tag": "Команда менеджера"}, {"who": "agent", "text": "Arizangiz №3 holati: Hujjatlar qabul qilindi.", "kind": "push", "tag": "Статус заявки"}, {"who": "manager_in", "text": "Ҳолат сақланди ва мижозга юборилди ✅", "kind": "card", "tag": null}, {"who": "manager", "text": "/status 3 3 Hujjatlar migratsiya xizmatiga topshirildi", "kind": "cmd", "tag": "Команда менеджера"}, {"who": "agent", "text": "Arizangiz №3 holati: Ariza topshirildi. Hujjatlar migratsiya xizmatiga topshirildi", "kind": "push", "tag": "Статус заявки"}, {"who": "manager_in", "text": "Ҳолат сақланди ва мижозга юборилди ✅", "kind": "card", "tag": null}, {"who": "manager", "text": "/status 3 4", "kind": "cmd", "tag": "Команда менеджера"}, {"who": "agent", "text": "Arizangiz №3 holati: Natija kutilmoqda.", "kind": "push", "tag": "Статус заявки"}, {"who": "manager_in", "text": "Ҳолат сақланди ва мижозга юборилди ✅", "kind": "card", "tag": null}, {"who": "manager", "text": "/status 3 5 Deport olib tashlandi", "kind": "cmd", "tag": "Команда менеджера"}, {"who": "agent", "text": "Arizangiz №3 holati: Yakunlandi ✅. Deport olib tashlandi\n\nXizmatimizni 1 dan 5 gacha baholang (raqam yozing). Fikringiz biz uchun muhim!", "kind": "push", "tag": "Статус заявки"}, {"who": "manager_in", "text": "Ҳолат сақланди ва мижозга юборилди ✅", "kind": "card", "tag": null}, {"who": "client", "text": "5", "kind": "msg", "tag": null}, {"who": "agent", "text": "Rahmat! 🙏 Do'stlaringizga tavsiya qiling: ular «NT3» kodini yozsa, menejerimiz alohida taklif beradi.", "kind": "msg", "tag": "Отзыв и реферальный код"}], "work": [{"who": "client", "text": "Salom, Turkiyadagi boshlig'im hujjat yubora oladi. Qanday hujjatlar kerak?", "kind": "msg", "tag": null}, {"who": "agent", "text": "Turkiyada ishlash uchun hujjatlar (ish beruvchi orqali) uchun odatda kerak bo'ladigan hujjatlar:\n• Vergi levhası (soliq guvohnomasi)\n• İmza sirküleri (imzo namunasi)\n• Oda sicil kaydı (savdo palatasi ro'yxati)\n• Son yılın gelir beyannamesi (oxirgi yil daromad deklaratsiyasi)\n• İşletme belgesi (korxona guvohnomasi)\n• Barcha hujjatlar PDF (skaner) shaklida WhatsApp orqali yuboriladi\nAniq ro'yxatni konsultantimiz holatingizga qarab tasdiqlaydi.\n\nBarcha hujjatlar PDF (skaner) ko'rinishida WhatsApp orqali yuboriladi. Shu chatga ham yuborsangiz bo'ladi.\n\nTurkiyada ishlash uchun hujjatlar (ish beruvchi orqali) — 800 $. Turkiyadagi ish beruvchingiz (boshlig'ingiz) kerakli hujjatlarni yuborsa, rasmiylashtirishni biz qilamiz. Kerakli hujjatlar ro'yxatini o'zimiz tashlab beramiz.\nNecha kishi uchun?", "kind": "msg", "tag": "База знаний"}, {"who": "client", "text": "1 kishi", "kind": "msg", "tag": null}, {"who": "agent", "text": "Ish beruvchingiz Turkiyaning qaysi shahrida va hujjatlarni yubora oladimi?", "kind": "msg", "tag": null}, {"who": "client", "text": "Istanbul, Kadıköy. Ha, yubora oladi", "kind": "msg", "tag": null}, {"who": "agent", "text": "Arizangizni tekshiring:\n• Turkiyada ishlash uchun hujjatlar (ish beruvchi orqali), 1 kishi — 800 $\n• Sardor, +998911112233\n• Istanbul, Kadıköy. Ha, yubora oladi\nHammasi to'g'rimi? «Ha» deb yozing yoki nimani o'zgartirishni ayting.", "kind": "msg", "tag": "Подтверждение"}, {"who": "client", "text": "ha", "kind": "msg", "tag": null}, {"who": "manager_in", "text": "✅ Янги ариза — лид #4\nКанал: WhatsApp (998911112233)\nТил: uz\nМижоз: Sardor\nТелефон: +998911112233\nХизмат: Turkiyada ishlash uchun hujjatlar (ish beruvchi orqali) × 1 = 800 $\nТафсилот: Istanbul, Kadıköy. Ha, yubora oladi\nЁзишма: /lead 4 · Жавоб: /reply 4 матн", "kind": "card", "tag": "Карточка менеджеру"}, {"who": "agent", "text": "hisob_4.pdf", "kind": "file", "tag": "Договор и счёт PDF"}, {"who": "agent", "text": "shartnoma_4.pdf", "kind": "file", "tag": "Договор и счёт PDF"}, {"who": "agent", "text": "Rahmat! Arizangiz №4 qabul qilindi ✅ Konsultantimiz tez orada bog'lanib, hujjatlar ro'yxati va keyingi qadamlarni aytadi.\n\nHujjatlarni yuborishdan oldin: ularni faqat arizangiz uchun shifrlangan holda saqlaymiz va xizmat tugagach 90 kundan keyin o'chiramiz. Rozimisiz? «Roziman» deb yozing.\n\nQabul qilingan: —\nQoldi: Vergi levhası (soliq guvohnomasi), İmza sirküleri (imzo namunasi), Oda sicil kaydı, Son yılın gelir beyannamesi, İşletme belgesi", "kind": "msg", "tag": "Согласие"}, {"who": "client", "text": "Roziman", "kind": "msg", "tag": "Согласие"}, {"who": "agent", "text": "Rahmat! Endi hujjatlarni shu yerga yuboring (PDF yoki rasm).", "kind": "msg", "tag": null}, {"who": "client", "text": "vergi_levhasi.pdf", "kind": "file", "tag": null}, {"who": "manager_in", "text": "📎 Ҳужжат — лид #4 (WhatsApp, Sardor)\nvergi_levhasi.pdf\n📎 vergi_levhasi.pdf", "kind": "card", "tag": null}, {"who": "agent", "text": "Hujjat qabul qilindi ✅ (jami 1 ta). Konsultantimiz ko'rib chiqadi.\nQabul qilingan: Vergi levhası (soliq guvohnomasi)\nQoldi: İmza sirküleri (imzo namunasi), Oda sicil kaydı, Son yılın gelir beyannamesi, İşletme belgesi", "kind": "msg", "tag": "Чек-лист документов"}, {"who": "client", "text": "imza_sirkuleri.pdf", "kind": "file", "tag": null}, {"who": "manager_in", "text": "📎 Ҳужжат — лид #4 (WhatsApp, Sardor)\nimza_sirkuleri.pdf\n📎 imza_sirkuleri.pdf", "kind": "card", "tag": null}, {"who": "agent", "text": "Hujjat qabul qilindi ✅ (jami 2 ta). Konsultantimiz ko'rib chiqadi.\nQabul qilingan: Vergi levhası (soliq guvohnomasi), İmza sirküleri (imzo namunasi)\nQoldi: Oda sicil kaydı, Son yılın gelir beyannamesi, İşletme belgesi", "kind": "msg", "tag": "Чек-лист документов"}, {"who": "system", "text": "Клиент пропал на 21 час — агент сам напомнил о недостающих документах", "kind": "sys", "tag": null}, {"who": "agent", "text": "Assalomu alaykum, Sardor! Arizangiz №4 uchun hujjatlar yetishmayapti: Oda sicil kaydı, Son yılın gelir beyannamesi, İşletme belgesi. PDF yoki rasm qilib shu yerga yuboring.", "kind": "push", "tag": "Напоминание"}, {"who": "client", "text": "oda_sicil_kaydi.pdf", "kind": "file", "tag": null}, {"who": "manager_in", "text": "📎 Ҳужжат — лид #4 (WhatsApp, Sardor)\noda_sicil_kaydi.pdf\n📎 oda_sicil_kaydi.pdf", "kind": "card", "tag": null}, {"who": "agent", "text": "Hujjat qabul qilindi ✅ (jami 3 ta). Konsultantimiz ko'rib chiqadi.\nQabul qilingan: Vergi levhası (soliq guvohnomasi), İmza sirküleri (imzo namunasi), Oda sicil kaydı\nQoldi: Son yılın gelir beyannamesi, İşletme belgesi", "kind": "msg", "tag": "Чек-лист документов"}, {"who": "client", "text": "gelir_beyannamesi.pdf", "kind": "file", "tag": null}, {"who": "manager_in", "text": "📎 Ҳужжат — лид #4 (WhatsApp, Sardor)\ngelir_beyannamesi.pdf\n📎 gelir_beyannamesi.pdf", "kind": "card", "tag": null}, {"who": "agent", "text": "Hujjat qabul qilindi ✅ (jami 4 ta). Konsultantimiz ko'rib chiqadi.\nQabul qilingan: Vergi levhası (soliq guvohnomasi), İmza sirküleri (imzo namunasi), Oda sicil kaydı, Son yılın gelir beyannamesi\nQoldi: İşletme belgesi", "kind": "msg", "tag": "Чек-лист документов"}, {"who": "client", "text": "isletme_belgesi.pdf", "kind": "file", "tag": null}, {"who": "manager_in", "text": "📎 Ҳужжат — лид #4 (WhatsApp, Sardor)\nisletme_belgesi.pdf\n📎 isletme_belgesi.pdf", "kind": "card", "tag": null}, {"who": "agent", "text": "Hujjat qabul qilindi ✅ (jami 5 ta). Konsultantimiz ko'rib chiqadi.\nBarcha hujjatlar qabul qilindi ✅", "kind": "msg", "tag": "Чек-лист документов"}, {"who": "client", "text": "arizam qayerda?", "kind": "msg", "tag": null}, {"who": "agent", "text": "Arizangiz №4 holati: Hujjatlar qabul qilindi.", "kind": "msg", "tag": "Статус заявки"}, {"who": "manager", "text": "/status 4 3", "kind": "cmd", "tag": "Команда менеджера"}, {"who": "agent", "text": "Arizangiz №4 holati: Ariza topshirildi.", "kind": "push", "tag": "Статус заявки"}, {"who": "manager_in", "text": "Ҳолат сақланди ва мижозга юборилди ✅", "kind": "card", "tag": null}, {"who": "system", "text": "Понедельник 09:00 — руководителю пришёл недельный отчёт", "kind": "sys", "tag": null}, {"who": "manager_in", "text": "📊 Ҳафталик ҳисобот (30.10–06.11)\n\nМижозлар: 4 (ўтган ҳафта 0)\nАризалар: 4 (ўтган ҳафта 0), конверсия 100%\nАризалар суммаси: 6 080 $\nОлдиндан тўлов келди: 600 $ · кутилмоқда: 1 та\nЭнг кўп ариза келган канал: Telegram (2 та)\nЖавобсиз саволлар: 0 та · ўртача баҳо: 5.0/5\n\nТавсиялар:\n• 1 та ариза олдиндан тўловни кутмоқда: мижозларга қўнғироқ қилинг (/leads).", "kind": "card", "tag": "Недельный отчёт"}]};
+const SCEN = [
+  { key: "passport", title: "Паспорт → депорт", sub: "Telegram · 80 $ → 2 600 $",
+    about: "Клиент проверяет паспорт за 80 $. Агент даёт ответ из базы знаний, оформляет заявку, спрашивает согласие перед фото паспорта и отправляет счёт и договор. Через 12 часов менеджер одной командой отправляет результат «запрет есть», и агент сам предлагает услугу снятия депорта. Клиент соглашается: имя и телефон второй раз не спрашиваются." },
+  { key: "deport", title: "Депорт с рекламы", sub: "Instagram · Payme · отзыв",
+    about: "Клиент приходит с рекламы в Instagram, и источник сохраняется. Спрашивает про гарантию и получает честный ответ без обещаний. После подтверждения получает ссылку Payme на 600 $. Оплата подтверждается автоматически, менеджер ведёт статусы, в конце клиент ставит оценку и получает реферальный код." },
+  { key: "work", title: "Документы работодателя", sub: "WhatsApp · чек-лист · отчёт",
+    about: "Клиенту нужны 5 документов от турецкого работодателя. Агент даёт список, просит согласие, отмечает каждый пришедший документ и, когда клиент пропадает, сам напоминает о недостающих. Клиент спрашивает «где моя заявка?» и получает ответ. В понедельник руководителю приходит недельный отчёт." },
+];
+const ROLE = { client: "Клиент", agent: "Агент", manager: "Менеджер", manager_in: "Менеджеру в Telegram", system: "Система" };
+let cur = 0, focus = null, timer = null;
+
+const $ = id => document.getElementById(id);
+function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
+
+function cls(e) {
+  if (e.who === "client") return "client" + (e.kind === "file" ? " file" : "");
+  if (e.who === "agent") return "agent" + (e.kind === "push" ? " push" : "") + (e.kind === "file" ? " push file" : "");
+  if (e.who === "manager") return "cmd";
+  if (e.who === "manager_in") return "mgr";
+  return "sys";
+}
+function render() {
+  const s = SCEN[cur], evs = DATA[s.key];
+  $("tabs").querySelectorAll(".tab").forEach((t, i) => t.setAttribute("aria-selected", String(i === cur)));
+  $("about").replaceChildren(el("h2", "", s.title), el("p", "note", s.about));
+  const log = $("log"); log.replaceChildren();
+  evs.forEach((e, i) => {
+    const box = el("div", "ev " + cls(e)); box.dataset.i = i; box.dataset.tag = e.tag || "";
+    if (e.who !== "system") {
+      const w = el("div", "who", ROLE[e.who] + (e.kind === "push" ? " · сам" : ""));
+      if (e.tag) w.append(el("span", "t", e.tag));
+      box.append(w);
+    }
+    box.append(el("div", "bubble", (e.kind === "file" ? "📎 " : "") + e.text));
+    log.append(box);
+  });
+  const tags = [...new Set(evs.map(e => e.tag).filter(Boolean))];
+  $("chips").replaceChildren(...tags.map(t => { const b = el("button", "chip", t); b.type = "button"; b.setAttribute("aria-pressed", String(focus === t));
+    b.onclick = () => { focus = focus === t ? null : t; applyFocus(); }; return b; }));
+  $("count").textContent = `${evs.length} событий`;
+  applyFocus();
+}
+function applyFocus() {
+  $("chips").querySelectorAll(".chip").forEach(c => c.setAttribute("aria-pressed", String(c.textContent === focus)));
+  $("log").querySelectorAll(".ev").forEach(b => b.classList.toggle("dim", !!focus && b.dataset.tag !== focus));
+  if (focus) { const first = $("log").querySelector(`.ev[data-tag="${CSS.escape(focus)}"]`); if (first) first.scrollIntoView({ block: "center", behavior: "smooth" }); }
+}
+function stop() { clearTimeout(timer); timer = null; $("play").textContent = "▶ Проиграть по шагам"; }
+function play() {
+  if (timer) { stop(); return; }
+  focus = null; applyFocus();
+  const items = [...$("log").children]; items.forEach(x => x.classList.add("hidden"));
+  let i = 0; $("play").textContent = "⏸ Пауза";
+  const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const step = () => {
+    if (i >= items.length) { stop(); return; }
+    const it = items[i++]; it.classList.remove("hidden");
+    if (!reduce) it.scrollIntoView({ block: "nearest", behavior: "smooth" });
+    const len = it.textContent.length;
+    timer = setTimeout(step, Math.min(2200, 450 + len * 9));
+  };
+  step();
+}
+SCEN.forEach((s, i) => {
+  const b = el("button", "tab"); b.type = "button"; b.setAttribute("role", "tab");
+  b.append(el("span", "", s.title), el("small", "", s.sub));
+  b.onclick = () => { stop(); cur = i; focus = null; render(); try { history.replaceState(null, "", "#" + s.key); } catch (e) {} };
+  $("tabs").append(b);
+});
+$("play").onclick = play;
+$("all").onclick = () => { stop(); $("log").querySelectorAll(".ev").forEach(x => x.classList.remove("hidden")); };
+const start = SCEN.findIndex(s => "#" + s.key === location.hash);
+cur = start >= 0 ? start : 0;
+render();
+</script>

@@ -1,0 +1,697 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Кошин-голограмма агента</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Unbounded:wght@500;700&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: full-bleed WebGL stage, a compact glass HUD on top-left, a hint strip at the bottom.
+   Single dark look: Iznik cobalt, turquoise, saffron over deep ink. */
+:root {
+  --ink: #04080F; --glass: rgba(8, 16, 30, 0.72); --line: rgba(160, 190, 230, 0.18);
+  --fg: #E7EEF7; --muted: #8EA0B8; --turq: #45C9C3; --saffron: #F2C66D;
+  --font-display: "Unbounded", "Segoe UI", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, Consolas, monospace;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html, body { height: 100%; }
+body { margin: 0; background: var(--ink); color: var(--fg); font-family: var(--font-mono); overflow: hidden; }
+#stage { position: fixed; inset: 0; touch-action: none; }
+#stage canvas { display: block; width: 100%; height: 100%; outline: none; }
+#labels { position: fixed; inset: 0; pointer-events: none; overflow: hidden; }
+.lbl { position: absolute; left: 0; top: 0; white-space: nowrap; font: 600 11px/1 var(--font-mono); letter-spacing: .04em;
+  color: var(--fg); background: rgba(4, 8, 15, 0.7); border: 1px solid var(--line); border-radius: 999px; padding: 5px 9px; will-change: transform; }
+.lbl.on { border-color: var(--saffron); color: var(--saffron); }
+.hud { position: fixed; z-index: 2; top: calc(12px + env(safe-area-inset-top, 0px)); left: max(12px, env(safe-area-inset-left, 0px));
+  width: min(300px, calc(100vw - 24px)); background: var(--glass); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+  border: 1px solid var(--line); border-radius: 14px; padding: 14px; display: flex; flex-direction: column; gap: 10px; }
+.hud h1 { font: 700 15px/1.25 var(--font-display); margin: 0; letter-spacing: .01em; text-wrap: balance; }
+.hud p { margin: 0; color: var(--muted); font-size: 11px; line-height: 1.5; }
+.stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+.stat { background: rgba(255,255,255,0.03); border: 1px solid var(--line); border-radius: 8px; padding: 6px 8px; min-width: 0; }
+.stat b { display: block; font-size: 14px; font-variant-numeric: tabular-nums; color: var(--fg); }
+.stat span { font-size: 9.5px; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; }
+.row { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+button, select { font: 600 11px var(--font-mono); color: var(--fg); background: rgba(255,255,255,0.05); border: 1px solid var(--line);
+  border-radius: 8px; padding: 6px 9px; cursor: pointer; }
+button[aria-pressed="true"] { border-color: var(--turq); color: var(--turq); }
+button:focus-visible, select:focus-visible { outline: 2px solid var(--saffron); outline-offset: 2px; }
+#info { min-height: 30px; color: var(--saffron); font-size: 11px; }
+.hint { position: fixed; z-index: 2; left: 50%; transform: translateX(-50%); bottom: calc(12px + env(safe-area-inset-bottom, 0px));
+  font-size: 11px; color: var(--muted); background: var(--glass); border: 1px solid var(--line); border-radius: 999px; padding: 7px 14px;
+  white-space: nowrap; max-width: calc(100vw - 24px); overflow: hidden; text-overflow: ellipsis; }
+.toggle-hud { display: none; }
+.hud .body { display: flex; flex-direction: column; gap: 10px; }
+.fallback { position: fixed; inset: 0; display: grid; place-items: center; padding: 24px; text-align: center; color: var(--muted); }
+@media (max-width: 560px) {
+  .hud { width: calc(100vw - 24px); padding: 10px; gap: 8px; }
+  .hud.min .body { display: none; }
+  .toggle-hud { display: inline-block; margin-left: auto; }
+  .lbl { font-size: 9.5px; padding: 4px 7px; }
+}
+</style>
+
+<div id="stage" aria-label="3D сцена: голограмма агента над полем кошинов"></div>
+<div id="labels"></div>
+<aside class="hud" id="hud">
+  <div class="row"><h1>Кошин-голограмма агента</h1><button class="toggle-hud" id="hudToggle" aria-expanded="true">—</button></div>
+  <div class="body">
+    <p>Сообщения из 7 каналов летят по полю симплекс-шума в агента. Плитки отвечают волнами давления.</p>
+    <div class="stats">
+      <div class="stat"><b id="sFps">–</b><span>FPS</span></div>
+      <div class="stat"><b id="sCalls">–</b><span>Draw calls/кадр</span></div>
+      <div class="stat"><b id="sParts">–</b><span>Частиц</span></div>
+      <div class="stat"><b id="sTris">–</b><span>Треуг., тыс.</span></div>
+      <div class="stat"><b id="sGeo">–</b><span>Геометрий</span></div>
+      <div class="stat"><b id="sTex">–</b><span>Текстур</span></div>
+    </div>
+    <div class="row">
+      <label for="quality" style="font-size:11px;color:var(--muted)">Качество</label>
+      <select id="quality"><option value="auto">Авто</option><option value="high">Высокое</option><option value="medium">Среднее</option><option value="low">Низкое</option></select>
+      <button id="bloomBtn" aria-pressed="true">Bloom</button>
+      <button id="pauseBtn" aria-pressed="false">Пауза</button>
+    </div>
+    <div id="info" aria-live="polite">Наведите на плитку или колонну канала.</div>
+  </div>
+</aside>
+<div class="hint">Вращение — перетаскивание · клик по плитке — волна · клик по колонне — фокус канала</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/shaders/CopyShader.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/shaders/LuminosityHighPassShader.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/EffectComposer.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/RenderPass.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/ShaderPass.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/UnrealBloomPass.js"></script>
+<script>
+"use strict";
+/* =====================================================================================
+   0. Shared GLSL: 3D simplex noise (Ashima / Stefan Gustavson, MIT) + the tile height field.
+   ===================================================================================== */
+const GLSL_NOISE = /* glsl */`
+vec3 mod289(vec3 x){return x-floor(x*(1.0/289.0))*289.0;}
+vec4 mod289(vec4 x){return x-floor(x*(1.0/289.0))*289.0;}
+vec4 permute(vec4 x){return mod289(((x*34.0)+1.0)*x);}
+vec4 taylorInvSqrt(vec4 r){return 1.79284291400159-0.85373472095314*r;}
+float snoise(vec3 v){
+  const vec2 C=vec2(1.0/6.0,1.0/3.0); const vec4 D=vec4(0.0,0.5,1.0,2.0);
+  vec3 i=floor(v+dot(v,C.yyy)); vec3 x0=v-i+dot(i,C.xxx);
+  vec3 g=step(x0.yzx,x0.xyz); vec3 l=1.0-g; vec3 i1=min(g.xyz,l.zxy); vec3 i2=max(g.xyz,l.zxy);
+  vec3 x1=x0-i1+C.xxx; vec3 x2=x0-i2+C.yyy; vec3 x3=x0-D.yyy;
+  i=mod289(i);
+  vec4 p=permute(permute(permute(i.z+vec4(0.0,i1.z,i2.z,1.0))+i.y+vec4(0.0,i1.y,i2.y,1.0))+i.x+vec4(0.0,i1.x,i2.x,1.0));
+  float n_=0.142857142857; vec3 ns=n_*D.wyz-D.xzx;
+  vec4 j=p-49.0*floor(p*ns.z*ns.z); vec4 x_=floor(j*ns.z); vec4 y_=floor(j-7.0*x_);
+  vec4 x=x_*ns.x+ns.yyyy; vec4 y=y_*ns.x+ns.yyyy; vec4 h=1.0-abs(x)-abs(y);
+  vec4 b0=vec4(x.xy,y.xy); vec4 b1=vec4(x.zw,y.zw);
+  vec4 s0=floor(b0)*2.0+1.0; vec4 s1=floor(b1)*2.0+1.0; vec4 sh=-step(h,vec4(0.0));
+  vec4 a0=b0.xzyw+s0.xzyw*sh.xxyy; vec4 a1=b1.xzyw+s1.xzyw*sh.zzww;
+  vec3 p0=vec3(a0.xy,h.x); vec3 p1=vec3(a0.zw,h.y); vec3 p2=vec3(a1.xy,h.z); vec3 p3=vec3(a1.zw,h.w);
+  vec4 norm=taylorInvSqrt(vec4(dot(p0,p0),dot(p1,p1),dot(p2,p2),dot(p3,p3)));
+  p0*=norm.x; p1*=norm.y; p2*=norm.z; p3*=norm.w;
+  vec4 m=max(0.6-vec4(dot(x0,x0),dot(x1,x1),dot(x2,x2),dot(x3,x3)),0.0); m=m*m;
+  return 42.0*dot(m*m,vec4(dot(p0,x0),dot(p1,x1),dot(p2,x2),dot(p3,x3)));
+}`;
+
+const MAX_IMPACTS = 8;
+/* Height of a tile at world xz p:
+   - slow "breathing" = simplex noise in (x, z, time) space,
+   - pressure waves: each impact is a Gaussian ring whose radius grows as dt*speed and whose
+     amplitude decays exponentially: amp * exp(-(d - v*dt)^2 * k) * exp(-dt * damping). */
+const GLSL_FIELD = /* glsl */`
+uniform float uTime;
+uniform vec4 uImpact[${MAX_IMPACTS}];   // xz = origin, z = start time, w = amplitude
+attribute float aHover;                 // per-instance hover lift, eased on the CPU with exp-LERP
+varying float vHgt;
+varying float vHover;
+${GLSL_NOISE}
+float fieldHeight(vec2 p){
+  float h = snoise(vec3(p * 0.075, uTime * 0.12)) * 0.32;
+  for (int i = 0; i < ${MAX_IMPACTS}; i++) {
+    vec4 im = uImpact[i];
+    float dt = uTime - im.z;
+    if (im.w > 0.0 && dt > 0.0 && dt < 5.0) {
+      float d = length(p - im.xy);
+      float ring = d - dt * 7.0;
+      h += im.w * exp(-ring * ring * 0.45) * exp(-dt * 0.85);
+    }
+  }
+  return h;
+}`;
+
+/* =====================================================================================
+   1. Configuration
+   ===================================================================================== */
+const CHANNELS = [
+  { name: "Instagram", color: 0xE1306C }, { name: "WhatsApp", color: 0x25D366 }, { name: "Telegram", color: 0x2AABEE },
+  { name: "Messenger", color: 0x5B8CFF }, { name: "Телефон", color: 0xE0A43A }, { name: "Голос", color: 0x9B7BFF },
+  { name: "Паспорт / PDF", color: 0xC9D4E5 },
+];
+const PRESETS = {
+  high:   { particles: 60000, radius: 26, shadow: 4096, dpr: 2,   bloomScale: 1 },
+  medium: { particles: 28000, radius: 22, shadow: 2048, dpr: 1.5, bloomScale: 0.75 },
+  low:    { particles: 12000, radius: 18, shadow: 1024, dpr: 1,   bloomScale: 0.5 },
+};
+function autoPreset() {
+  const small = Math.min(innerWidth, innerHeight) < 700, cores = navigator.hardwareConcurrency || 4;
+  return small || cores <= 4 ? "medium" : "high";
+}
+const PALETTE = [0x163A86, 0x1D4E9E, 0x0F2E66, 0x2A63C4, 0x0F8A87, 0x123A70, 0x1D4E9E, 0xF2C66D];
+
+/* =====================================================================================
+   2. Scene factory. create() builds everything; the returned destroy() frees GPU memory.
+   ===================================================================================== */
+function create(container, labelsEl, presetName, ui) {
+  const Q = PRESETS[presetName];
+  const renderer = new THREE.WebGLRenderer({ antialias: false, powerPreference: "high-performance", stencil: false });
+  renderer.setPixelRatio(Math.min(devicePixelRatio || 1, Q.dpr));
+  renderer.outputEncoding = THREE.LinearEncoding;      // tone mapping + gamma happen in our final pass
+  renderer.toneMapping = THREE.NoToneMapping;
+  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  renderer.shadowMap.autoUpdate = true;
+  renderer.info.autoReset = false;                       // count draw calls for the whole frame (scene + shadow + post passes)
+  container.appendChild(renderer.domElement);
+
+  const lin = hex => new THREE.Color(hex).convertSRGBToLinear();   // palette is sRGB, lighting is linear
+  const scene = new THREE.Scene();
+  scene.background = lin(0x04080F);
+  scene.fog = new THREE.FogExp2(lin(0x04080F).getHex(), 0.018);
+
+  const camera = new THREE.PerspectiveCamera(45, 1, 0.1, 400);
+  camera.position.set(0, 22, 38);
+
+  const controls = new THREE.OrbitControls(camera, renderer.domElement);
+  controls.enableDamping = true; controls.dampingFactor = 0.06;               // inertia
+  controls.minDistance = 14; controls.maxDistance = 80;
+  controls.maxPolarAngle = Math.PI * 0.47; controls.minPolarAngle = Math.PI * 0.12;
+  controls.target.set(0, 3, 0);
+  controls.autoRotate = true; controls.autoRotateSpeed = 0.35;
+  controls.enablePan = false;
+  const stopAuto = () => { controls.autoRotate = false; };
+  controls.addEventListener("start", stopAuto);
+
+  // ---------- lights: hemisphere fill, one shadow-casting key light, a pulsing turquoise core light
+  scene.add(new THREE.HemisphereLight(lin(0x6F8FC8), lin(0x0A1020), 0.55));
+  const sun = new THREE.DirectionalLight(lin(0xFFF1D6), 1.25);
+  sun.position.set(-18, 30, 14);
+  sun.castShadow = true;
+  sun.shadow.mapSize.set(Q.shadow, Q.shadow);
+  const sc = sun.shadow.camera; sc.left = -Q.radius - 4; sc.right = Q.radius + 4; sc.top = Q.radius + 4; sc.bottom = -Q.radius - 4; sc.near = 5; sc.far = 80;
+  sun.shadow.bias = -0.0004; sun.shadow.normalBias = 0.02; sun.shadow.radius = 3;
+  scene.add(sun);
+  const coreLight = new THREE.PointLight(lin(0x45C9C3), 2.2, 34, 1.6);
+  coreLight.position.set(0, 6, 0);
+  scene.add(coreLight);
+
+  const uniforms = {                                    // shared by tiles and their shadow depth pass
+    uTime: { value: 0 },
+    uImpact: { value: Array.from({ length: MAX_IMPACTS }, () => new THREE.Vector4(0, 0, -99, 0)) },
+    uGlow: { value: lin(0x45C9C3) },
+  };
+
+  /* ---------- 2a. Tile field: two InstancedMeshes (8-point stars + diamond fillers) = 2 draw calls.
+     Geometry is flat in XZ; the vertex shader lifts each instance by fieldHeight(instance centre). */
+  function starShape(r, inner) {
+    const s = new THREE.Shape();
+    for (let i = 0; i < 16; i++) {
+      const rr = i % 2 ? r * inner : r, a = (i / 16) * Math.PI * 2 + Math.PI / 8;
+      i ? s.lineTo(Math.cos(a) * rr, Math.sin(a) * rr) : s.moveTo(Math.cos(a) * rr, Math.sin(a) * rr);
+    }
+    return s;
+  }
+  const STEP = 1.6;
+  const starGeo = new THREE.ExtrudeGeometry(starShape(0.78, 0.62), { depth: 0.22, bevelEnabled: true, bevelThickness: 0.05, bevelSize: 0.05, bevelSegments: 1, curveSegments: 1 });
+  starGeo.rotateX(-Math.PI / 2);
+  const diaShape = new THREE.Shape(); diaShape.moveTo(0, 0.36); diaShape.lineTo(0.36, 0); diaShape.lineTo(0, -0.36); diaShape.lineTo(-0.36, 0); diaShape.closePath();
+  const diaGeo = new THREE.ExtrudeGeometry(diaShape, { depth: 0.16, bevelEnabled: false });
+  diaGeo.rotateX(-Math.PI / 2);
+
+  const tileMat = new THREE.MeshStandardMaterial({ roughness: 0.38, metalness: 0.25, color: 0xffffff });
+  const patch = (shader, withFragment) => {
+    shader.uniforms.uTime = uniforms.uTime; shader.uniforms.uImpact = uniforms.uImpact; shader.uniforms.uGlow = uniforms.uGlow;
+    shader.vertexShader = GLSL_FIELD + "\n" + shader.vertexShader.replace("#include <begin_vertex>", `
+      #include <begin_vertex>
+      vec2 centre = (instanceMatrix * vec4(0.0, 0.0, 0.0, 1.0)).xz;
+      float hgt = fieldHeight(centre) + aHover * 1.1;
+      transformed.y += hgt;
+      vHgt = hgt; vHover = aHover;`);
+    if (withFragment) {
+      shader.fragmentShader = "uniform vec3 uGlow;\nvarying float vHgt;\nvarying float vHover;\n" + shader.fragmentShader.replace(
+        "#include <emissivemap_fragment>", `
+        #include <emissivemap_fragment>
+        totalEmissiveRadiance += uGlow * (smoothstep(0.25, 1.25, vHgt) * 1.6 + vHover * 2.2);`);
+    }
+  };
+  tileMat.onBeforeCompile = s => patch(s, true);
+  // Shadow pass must see the same displacement, or shadows would stay flat.
+  const depthMat = new THREE.MeshDepthMaterial({ depthPacking: THREE.RGBADepthPacking });
+  depthMat.onBeforeCompile = s => {
+    patch(s, false);
+    s.fragmentShader = "varying float vHgt;\nvarying float vHover;\n" + s.fragmentShader;
+  };
+
+  const cells = [];
+  const R = Q.radius;
+  for (let x = -R; x <= R + 1e-6; x += STEP) for (let z = -R; z <= R + 1e-6; z += STEP) {
+    const d = Math.hypot(x, z);
+    if (d <= R && d > 2.2) cells.push([x, z]);
+  }
+  const diamonds = [];
+  for (let x = -R + STEP / 2; x <= R; x += STEP) for (let z = -R + STEP / 2; z <= R; z += STEP) {
+    const d = Math.hypot(x, z);
+    if (d <= R - 0.4 && d > 2.6) diamonds.push([x, z]);
+  }
+  const _m = new THREE.Matrix4(), _q = new THREE.Quaternion(), _s = new THREE.Vector3(1, 1, 1), _p = new THREE.Vector3(), _c = new THREE.Color();
+  const _yAxis = new THREE.Vector3(0, 1, 0);
+  function buildField(geo, list, colorFn) {
+    const mesh = new THREE.InstancedMesh(geo, tileMat, list.length);
+    mesh.customDepthMaterial = depthMat;
+    mesh.castShadow = true; mesh.receiveShadow = true;
+    const hover = new Float32Array(list.length);
+    geo.setAttribute("aHover", new THREE.InstancedBufferAttribute(hover, 1).setUsage(THREE.DynamicDrawUsage));
+    list.forEach(([x, z], i) => {
+      _q.setFromAxisAngle(_yAxis, (Math.round(x / STEP) + Math.round(z / STEP)) % 2 ? Math.PI / 8 : 0);  // alternate tile orientation
+      _p.set(x, 0, z); _m.compose(_p, _q, _s); mesh.setMatrixAt(i, _m);
+      mesh.setColorAt(i, _c.copy(lin(colorFn(x, z, i))));
+    });
+    mesh.instanceMatrix.needsUpdate = true; mesh.instanceColor.needsUpdate = true;
+    mesh.frustumCulled = false;        // instances are displaced in the shader; the CPU bound would be wrong
+    scene.add(mesh);
+    return { mesh, hover, target: new Float32Array(list.length), attr: geo.attributes.aHover, list };
+  }
+  // colour selection: a deterministic hash over the grid gives an Iznik-like irregular palette
+  const hash = (x, z) => { const s = Math.sin(x * 12.9898 + z * 78.233) * 43758.5453; return s - Math.floor(s); };
+  const stars = buildField(starGeo, cells, (x, z) => {
+    const h = hash(Math.round(x / STEP), Math.round(z / STEP));
+    return h > 0.965 ? 0xF2C66D : h > 0.9 ? 0x0F8A87 : PALETTE[Math.floor(h * 6)];
+  });
+  const dias = buildField(diaGeo, diamonds, (x, z) => hash(x, z) > 0.8 ? 0x0F8A87 : 0x0B2550);
+
+  /* ---------- 2b. Channel pillars: one InstancedMesh (7 hexagonal prisms), raycast by instanceId. */
+  const RING = R - 3.5, pillarGeo = new THREE.CylinderGeometry(0.75, 0.9, 1, 6);
+  pillarGeo.translate(0, 0.5, 0);
+  const pillarMat = new THREE.MeshStandardMaterial({ roughness: 0.3, metalness: 0.5, emissive: 0xffffff, emissiveIntensity: 0.08 });
+  const pillars = new THREE.InstancedMesh(pillarGeo, pillarMat, CHANNELS.length);
+  pillars.castShadow = true; pillars.receiveShadow = true;
+  const emitters = [], pillarScale = new Float32Array(CHANNELS.length).fill(1), pillarTarget = new Float32Array(CHANNELS.length).fill(1);
+  const PILLAR_H = 7;
+  CHANNELS.forEach((ch, i) => {
+    const a = (i / CHANNELS.length) * Math.PI * 2 + 0.25;
+    const x = Math.cos(a) * RING, z = Math.sin(a) * RING;
+    emitters.push(new THREE.Vector3(x, PILLAR_H + 0.4, z));
+    pillars.setColorAt(i, _c.copy(lin(ch.color)));
+  });
+  pillars.instanceColor.needsUpdate = true;
+  scene.add(pillars);
+  function writePillar(i) {
+    const e = emitters[i];
+    _p.set(e.x, 0, e.z); _s.set(1, PILLAR_H * pillarScale[i], 1); _q.identity();
+    _m.compose(_p, _q, _s); pillars.setMatrixAt(i, _m); _s.set(1, 1, 1);
+  }
+  CHANNELS.forEach((_, i) => writePillar(i));
+  pillars.instanceMatrix.needsUpdate = true;
+
+  /* ---------- 2c. Hologram agent: extruded 8-point star with a custom fresnel/scanline shader,
+     an emissive solid core that casts shadow, and two orbit rings. */
+  const holoGeo = new THREE.ExtrudeGeometry(starShape(2.6, 0.62), { depth: 0.7, bevelEnabled: true, bevelThickness: 0.18, bevelSize: 0.14, bevelSegments: 3, curveSegments: 2 });
+  holoGeo.center();
+  const holoMat = new THREE.ShaderMaterial({
+    uniforms: { uTime: uniforms.uTime, uColor: { value: lin(0x45C9C3) }, uPulse: { value: 0 } },
+    vertexShader: /* glsl */`
+      varying vec3 vN; varying vec3 vView; varying float vY;
+      void main(){
+        vec4 wp = modelMatrix * vec4(position, 1.0);
+        vY = wp.y;
+        vN = normalize(mat3(modelMatrix) * normal);
+        vView = normalize(cameraPosition - wp.xyz);
+        gl_Position = projectionMatrix * viewMatrix * wp;
+      }`,
+    fragmentShader: /* glsl */`
+      uniform float uTime; uniform vec3 uColor; uniform float uPulse;
+      varying vec3 vN; varying vec3 vView; varying float vY;
+      float h1(float n){ return fract(sin(n) * 43758.5453); }
+      void main(){
+        float fres = pow(1.0 - abs(dot(normalize(vN), normalize(vView))), 2.4);           // edge glow
+        float scan = 0.5 + 0.5 * sin(vY * 34.0 - uTime * 7.0);                              // horizontal scanlines
+        float band = smoothstep(0.0, 0.08, fract(vY * 0.35 - uTime * 0.6)) * (1.0 - smoothstep(0.08, 0.16, fract(vY * 0.35 - uTime * 0.6)));
+        float flicker = 0.88 + 0.12 * h1(floor(uTime * 24.0));                              // stepped 24 Hz flicker
+        vec3 col = uColor * (fres * 2.4 + scan * 0.22 + band * 1.6 + uPulse * 0.8) * flicker;
+        float a = clamp(fres * 0.95 + 0.12 + scan * 0.08 + band * 0.5, 0.0, 1.0);
+        gl_FragColor = vec4(col, a);
+      }`,
+    transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide,
+  });
+  const holo = new THREE.Mesh(holoGeo, holoMat);
+  holo.position.set(0, 6, 0);
+  scene.add(holo);
+  const core = new THREE.Mesh(new THREE.IcosahedronGeometry(0.9, 2),
+    new THREE.MeshStandardMaterial({ color: lin(0x0F8A87), emissive: lin(0x45C9C3), emissiveIntensity: 1.6, roughness: 0.2, metalness: 0.1 }));
+  core.position.copy(holo.position); core.castShadow = true;
+  scene.add(core);
+  const ringMat = new THREE.MeshBasicMaterial({ color: lin(0xF2C66D), transparent: true, opacity: 0.85 });
+  const ringA = new THREE.Mesh(new THREE.TorusGeometry(3.6, 0.035, 8, 180), ringMat);
+  const ringB = new THREE.Mesh(new THREE.TorusGeometry(4.3, 0.025, 8, 180), ringMat);
+  ringA.position.copy(holo.position); ringB.position.copy(holo.position);
+  scene.add(ringA, ringB);
+  // pedestal disc under the agent, receives the core's shadow
+  const pedestal = new THREE.Mesh(new THREE.CylinderGeometry(2.1, 2.4, 0.4, 48), new THREE.MeshStandardMaterial({ color: lin(0x0B1730), roughness: 0.5, metalness: 0.4 }));
+  pedestal.position.y = 0.2; pedestal.receiveShadow = true; pedestal.castShadow = true;
+  scene.add(pedestal);
+
+  /* ---------- 2d. Message particles: one Points draw call, positions computed entirely on the GPU.
+     Each particle: quadratic Bezier from its channel emitter to the agent, plus a curl-like offset
+     from three decorrelated simplex samples, scaled by sin(pi*t) so the ends stay pinned. */
+  const N = Q.particles;
+  const pGeo = new THREE.BufferGeometry();
+  const aChan = new Float32Array(N), aSeed = new Float32Array(N), aSpeed = new Float32Array(N);
+  for (let i = 0; i < N; i++) { aChan[i] = i % CHANNELS.length; aSeed[i] = Math.random(); aSpeed[i] = 0.05 + Math.random() * 0.07; }
+  pGeo.setAttribute("position", new THREE.BufferAttribute(new Float32Array(N * 3), 3));   // unused, required by three
+  pGeo.setAttribute("aChan", new THREE.BufferAttribute(aChan, 1));
+  pGeo.setAttribute("aSeed", new THREE.BufferAttribute(aSeed, 1));
+  pGeo.setAttribute("aSpeed", new THREE.BufferAttribute(aSpeed, 1));
+  const pMat = new THREE.ShaderMaterial({
+    uniforms: {
+      uTime: uniforms.uTime, uEmit: { value: emitters }, uCore: { value: holo.position },
+      uColor: { value: CHANNELS.map(c => lin(c.color)) }, uGold: { value: lin(0x45C9C3) },
+      uFocus: { value: -1 }, uFocusMix: { value: 0 }, uScale: { value: 1 },
+    },
+    vertexShader: /* glsl */`
+      ${GLSL_NOISE}
+      uniform float uTime; uniform vec3 uEmit[${CHANNELS.length}]; uniform vec3 uCore; uniform vec3 uColor[${CHANNELS.length}];
+      uniform vec3 uGold; uniform float uFocus; uniform float uFocusMix; uniform float uScale;
+      attribute float aChan; attribute float aSeed; attribute float aSpeed;
+      varying vec3 vCol; varying float vA;
+      void main(){
+        int ch = int(aChan + 0.5);
+        float t = fract(uTime * aSpeed + aSeed);
+        vec3 a = uEmit[ch];
+        vec3 c = uCore;
+        vec3 m = mix(a, c, 0.5) + vec3(0.0, 7.0 + aSeed * 6.0, 0.0);
+        vec3 p = mix(mix(a, m, t), mix(m, c, t), t);                 // quadratic Bezier
+        float env = sin(3.14159265 * t);
+        vec3 q = p * 0.12 + vec3(aSeed * 31.0, 0.0, uTime * 0.25);
+        p += vec3(snoise(q), snoise(q + 19.1), snoise(q + 47.3)) * env * 2.6;
+        vec4 mv = modelViewMatrix * vec4(p, 1.0);
+        bool focused = uFocus < -0.5 || abs(aChan - uFocus) < 0.5;
+        float dim = focused ? 1.0 + uFocusMix * 0.6 : 1.0 - uFocusMix * 0.85;
+        gl_PointSize = uScale * (0.55 + 0.45 * env) * (focused ? 1.0 + uFocusMix * 0.5 : 1.0) * 26.0 / -mv.z;
+        gl_Position = projectionMatrix * mv;
+        vCol = mix(uColor[ch], uGold, smoothstep(0.65, 1.0, t));
+        vA = env * dim;
+      }`,
+    fragmentShader: /* glsl */`
+      varying vec3 vCol; varying float vA;
+      void main(){
+        float d = length(gl_PointCoord - 0.5);
+        float a = smoothstep(0.5, 0.0, d);
+        gl_FragColor = vec4(vCol * 1.8, a * a * vA);
+      }`,
+    transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
+  });
+  const points = new THREE.Points(pGeo, pMat);
+  points.frustumCulled = false;
+  scene.add(points);
+
+  /* ---------- 3. Post-processing: HDR targets -> bloom -> final pass
+     (chromatic aberration, ACES filmic tone map, gamma, vignette, film grain). */
+  const isGL2 = renderer.capabilities.isWebGL2;
+  const rtType = isGL2 || renderer.extensions.has("OES_texture_half_float") ? THREE.HalfFloatType : THREE.UnsignedByteType;
+  const rt = new THREE.WebGLRenderTarget(2, 2, { type: rtType, format: THREE.RGBAFormat, minFilter: THREE.LinearFilter, magFilter: THREE.LinearFilter });
+  const composer = new THREE.EffectComposer(renderer, rt);
+  composer.addPass(new THREE.RenderPass(scene, camera));
+  const bloom = new THREE.UnrealBloomPass(new THREE.Vector2(2, 2), 0.95, 0.55, 0.82);
+  composer.addPass(bloom);
+  const finalPass = new THREE.ShaderPass({
+    uniforms: { tDiffuse: { value: null }, uTime: uniforms.uTime, uAberr: { value: 0.006 }, uExposure: { value: 1.1 }, uRes: { value: new THREE.Vector2(1, 1) } },
+    vertexShader: `varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
+    fragmentShader: /* glsl */`
+      uniform sampler2D tDiffuse; uniform float uTime; uniform float uAberr; uniform float uExposure; uniform vec2 uRes;
+      varying vec2 vUv;
+      vec3 aces(vec3 x){ return clamp((x * (2.51 * x + 0.03)) / (x * (2.43 * x + 0.59) + 0.14), 0.0, 1.0); }  // Narkowicz fit
+      float grain(vec2 p){ return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453); }
+      void main(){
+        vec2 d = vUv - 0.5; float r2 = dot(d, d);
+        vec2 off = d * uAberr * (0.4 + r2 * 3.0);                       // aberration grows towards the edges
+        vec3 col = vec3(texture2D(tDiffuse, vUv + off).r, texture2D(tDiffuse, vUv).g, texture2D(tDiffuse, vUv - off).b);
+        col = aces(col * uExposure);
+        col = pow(col, vec3(1.0 / 2.2));
+        col *= mix(1.0, smoothstep(0.85, 0.2, r2 * 2.2), 0.65);         // vignette
+        col += (grain(vUv * uRes + fract(uTime) * 100.0) - 0.5) * 0.035;
+        gl_FragColor = vec4(col, 1.0);
+      }`,
+  });
+  composer.addPass(finalPass);
+
+  /* ---------- 4. Interaction: custom raycasting.
+     Tiles: analytic ray/plane hit at y = 0 (O(1), no per-triangle tests over ~2000 instances).
+     Pillars: three.js Raycaster against the InstancedMesh -> instanceId. */
+  const raycaster = new THREE.Raycaster();
+  const pointer = new THREE.Vector2(9, 9), groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+  const hit = new THREE.Vector3(), lookTarget = new THREE.Vector3(), hits = [];
+  let hasHit = false, hoverPillar = -1, focus = -1, impactSlot = 0, pointerDirty = false, downX = 0, downY = 0;
+  function setPointer(e) {
+    const r = renderer.domElement.getBoundingClientRect();
+    pointer.set(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1);
+    pointerDirty = true;
+  }
+  function impact(x, z, amp) {
+    uniforms.uImpact.value[impactSlot].set(x, z, uniforms.uTime.value, amp);
+    impactSlot = (impactSlot + 1) % MAX_IMPACTS;
+  }
+  const onMove = e => setPointer(e);
+  const onLeave = () => { pointer.set(9, 9); pointerDirty = true; };
+  const onDown = e => { downX = e.clientX; downY = e.clientY; setPointer(e); };
+  const onUp = e => {
+    if (Math.hypot(e.clientX - downX, e.clientY - downY) > 6) return;      // that was a drag, not a click
+    setPointer(e); pick();
+    if (hoverPillar >= 0) {
+      focus = focus === hoverPillar ? -1 : hoverPillar;
+      pMat.uniforms.uFocus.value = focus < 0 ? pMat.uniforms.uFocus.value : focus;
+      ui.info(focus < 0 ? "Фокус снят: все каналы." : `Фокус: ${CHANNELS[focus].name}. Повторный клик — снять.`);
+      labelEls.forEach((el, i) => el.classList.toggle("on", i === focus));
+    } else if (hasHit) {
+      impact(hit.x, hit.z, 1.6);
+      ui.info(`Волна из точки (${hit.x.toFixed(1)}; ${hit.z.toFixed(1)}).`);
+    }
+  };
+  const el = renderer.domElement;
+  el.addEventListener("pointermove", onMove);
+  el.addEventListener("pointerleave", onLeave);
+  el.addEventListener("pointerdown", onDown);
+  el.addEventListener("pointerup", onUp);
+
+  function pick() {
+    raycaster.setFromCamera(pointer, camera);
+    hits.length = 0;
+    raycaster.intersectObject(pillars, false, hits);
+    hoverPillar = hits.length ? hits[0].instanceId : -1;
+    hasHit = hoverPillar < 0 && raycaster.ray.intersectPlane(groundPlane, hit) !== null && Math.hypot(hit.x, hit.z) <= R;
+    el.style.cursor = hoverPillar >= 0 || hasHit ? "pointer" : "grab";
+    pointerDirty = false;
+  }
+
+  /* exp-LERP: frame-rate independent smoothing, x += (target - x) * (1 - e^(-k*dt)) */
+  const ease = (k, dt) => 1 - Math.exp(-k * dt);
+  function updateHover(field, dt) {
+    const { hover, target, list, attr } = field, k = ease(9, dt);
+    let changed = false;
+    for (let i = 0; i < list.length; i++) {
+      let tgt = 0;
+      if (hasHit) {
+        const dx = list[i][0] - hit.x, dz = list[i][1] - hit.z, d2 = dx * dx + dz * dz;
+        tgt = d2 < 9 ? Math.exp(-d2 * 0.55) : 0;                      // Gaussian brush, radius ~3 units
+      }
+      target[i] = tgt;
+      const nv = hover[i] + (tgt - hover[i]) * k;
+      if (Math.abs(nv - hover[i]) > 1e-4) { hover[i] = nv; changed = true; }
+    }
+    if (changed) attr.needsUpdate = true;
+  }
+
+  /* ---------- labels for channels (HTML overlay, positions from reused vectors) */
+  const labelEls = CHANNELS.map(ch => { const s = document.createElement("span"); s.className = "lbl"; s.textContent = ch.name; labelsEl.appendChild(s); return s; });
+  const labelSize = labelEls.map(() => [70, 22]);
+  requestAnimationFrame(() => labelEls.forEach((s, i) => { labelSize[i][0] = s.offsetWidth; labelSize[i][1] = s.offsetHeight; }));
+  const _lv = new THREE.Vector3();
+
+  /* ---------- resize without distortion: camera aspect + composer + bloom resolution follow the container */
+  let W = 1, H = 1, framed = false;
+  function resize() {
+    W = Math.max(1, container.clientWidth); H = Math.max(1, container.clientHeight);
+    renderer.setSize(W, H, false);
+    camera.aspect = W / H;
+    camera.fov = W < H ? 58 : 45;                                       // portrait: wider vertical FOV keeps the ring in frame
+    camera.updateProjectionMatrix();
+    if (!framed) {                                                      // first frame only: pull back so the pillar ring fits the width
+      framed = true;
+      const hf = 2 * Math.atan(Math.tan(THREE.MathUtils.degToRad(camera.fov) / 2) * camera.aspect);
+      const need = (R + 2) / Math.tan(hf / 2) * 0.82;
+      if (need > camera.position.length()) camera.position.setLength(Math.min(need, controls.maxDistance));
+    }
+    const pr = renderer.getPixelRatio();
+    composer.setPixelRatio(pr); composer.setSize(W, H);
+    bloom.setSize(W * pr * Q.bloomScale, H * pr * Q.bloomScale);
+    finalPass.uniforms.uRes.value.set(W * pr, H * pr);
+    pMat.uniforms.uScale.value = H * pr / 900 * 1.0 + 0.4;
+  }
+  const ro = new ResizeObserver(resize); ro.observe(container); resize();
+
+  /* ---------- 5. Animation loop: zero allocations, every temporary is preallocated above. */
+  const clock = new THREE.Clock();
+  const qLook = new THREE.Quaternion(), qSpin = new THREE.Quaternion(), qTarget = new THREE.Quaternion(), zAxis = new THREE.Vector3(0, 0, 1);
+  const dummy = new THREE.Object3D(); dummy.position.copy(holo.position);
+  let raf = 0, paused = false, nextAuto = 1.2, pulse = 0, spin = 0, fpsAcc = 0, fpsFrames = 0, bloomOn = true;
+  const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  if (reduce) controls.autoRotate = false;
+
+  function frame() {
+    raf = requestAnimationFrame(frame);
+    renderer.info.reset();
+    const dt = Math.min(clock.getDelta(), 0.05);
+    fpsAcc += dt; fpsFrames++;
+    if (paused) { controls.update(); render(); return; }
+    const t = (uniforms.uTime.value += dt * (reduce ? 0.35 : 1));
+    finalPass.uniforms.uTime.value = t;                 // ShaderPass clones its uniforms, so time is pushed explicitly
+
+    // "message delivered": a burst at the agent's base radiates a pressure wave over the field
+    nextAuto -= dt;
+    if (nextAuto <= 0) { impact(0, 0, 0.9); pulse = 1; nextAuto = 1.6 + Math.random() * 1.4; }
+    pulse += (0 - pulse) * ease(2.2, dt);
+    coreLight.intensity = 2.2 + pulse * 4.0;
+    holoMat.uniforms.uPulse.value = pulse;
+
+    if (pointerDirty) pick();
+    updateHover(stars, dt); updateHover(dias, dt);
+
+    // pillars: hovered one grows; scale eased with exp-LERP, only touched matrices are rewritten
+    let pillarsChanged = false;
+    for (let i = 0; i < CHANNELS.length; i++) {
+      pillarTarget[i] = i === hoverPillar ? 1.18 : i === focus ? 1.1 : 1;
+      const nv = pillarScale[i] + (pillarTarget[i] - pillarScale[i]) * ease(10, dt);
+      if (Math.abs(nv - pillarScale[i]) > 1e-4) { pillarScale[i] = nv; writePillar(i); pillarsChanged = true; }
+    }
+    if (pillarsChanged) pillars.instanceMatrix.needsUpdate = true;
+    const fm = pMat.uniforms.uFocusMix;
+    fm.value += ((focus >= 0 ? 1 : 0) - fm.value) * ease(4, dt);
+
+    // agent orientation: look at the hovered point (or the camera), then spin about its own axis.
+    // Composition qTarget = qLook * qSpin; slerp keeps the motion on the shortest arc.
+    if (hasHit) lookTarget.copy(hit); else if (hoverPillar >= 0) lookTarget.copy(emitters[hoverPillar]); else lookTarget.copy(camera.position);
+    dummy.lookAt(lookTarget);
+    qLook.copy(dummy.quaternion);
+    spin += dt * 0.55;
+    qSpin.setFromAxisAngle(zAxis, spin);
+    qTarget.multiplyQuaternions(qLook, qSpin);
+    holo.quaternion.slerp(qTarget, ease(3.5, dt));
+    holo.position.y = 6 + Math.sin(t * 1.1) * 0.25;
+    core.position.y = holo.position.y; core.rotation.y += dt * 0.7;
+    ringA.position.y = ringB.position.y = holo.position.y;
+    ringA.rotation.set(Math.PI / 2 + Math.sin(t * 0.5) * 0.35, t * 0.4, 0);
+    ringB.rotation.set(Math.PI / 2 + Math.cos(t * 0.37) * 0.5, -t * 0.3, t * 0.2);
+
+    controls.update();
+    render();
+
+    // labels: project emitters, clamp inside the viewport
+    for (let i = 0; i < labelEls.length; i++) {
+      _lv.copy(emitters[i]); _lv.y += 1.1; _lv.project(camera);
+      const s = labelEls[i];
+      if (_lv.z > 1) { s.style.visibility = "hidden"; continue; }
+      s.style.visibility = "";
+      const hw = labelSize[i][0] / 2, hh = labelSize[i][1] / 2;
+      const x = Math.min(W - hw - 6, Math.max(hw + 6, (_lv.x * 0.5 + 0.5) * W));
+      const y = Math.min(H - hh - 6, Math.max(hh + 6, (-_lv.y * 0.5 + 0.5) * H));
+      s.style.transform = `translate(${(x - hw).toFixed(1)}px,${(y - hh).toFixed(1)}px)`;
+    }
+    if (fpsAcc >= 0.5) {
+      const info = renderer.info;
+      ui.stats(fpsFrames / fpsAcc, info.render.calls, N, info.render.triangles, info.memory.geometries, info.memory.textures);
+      fpsAcc = 0; fpsFrames = 0;
+    }
+  }
+  function render() {
+    if (bloomOn) composer.render(); else { bloom.enabled = false; composer.render(); bloom.enabled = true; }
+  }
+  raf = requestAnimationFrame(frame);
+
+  /* ---------- 6. Teardown: everything this scene put on the GPU is released. */
+  function destroy() {
+    cancelAnimationFrame(raf);
+    ro.disconnect();
+    el.removeEventListener("pointermove", onMove); el.removeEventListener("pointerleave", onLeave);
+    el.removeEventListener("pointerdown", onDown); el.removeEventListener("pointerup", onUp);
+    controls.removeEventListener("start", stopAuto); controls.dispose();
+    const mats = new Set(), geos = new Set();
+    scene.traverse(o => {
+      if (o.geometry) geos.add(o.geometry);
+      if (o.material) [].concat(o.material).forEach(m => mats.add(m));
+      if (o.customDepthMaterial) mats.add(o.customDepthMaterial);
+      if (o.isInstancedMesh && o.dispose) o.dispose();
+    });
+    geos.forEach(g => g.dispose());
+    mats.forEach(m => { for (const k in m) { const v = m[k]; if (v && v.isTexture) v.dispose(); } m.dispose(); });
+    sun.shadow.map && sun.shadow.map.dispose();
+    bloom.dispose();
+    finalPass.fsQuad && finalPass.fsQuad.dispose(); finalPass.material && finalPass.material.dispose();
+    composer.renderTarget1.dispose(); composer.renderTarget2.dispose();
+    renderer.renderLists.dispose();
+    renderer.dispose();
+    renderer.forceContextLoss();
+    renderer.domElement.remove();
+    labelEls.forEach(s => s.remove());
+  }
+
+  return {
+    destroy,
+    setPaused(v) { paused = v; },
+    setBloom(v) { bloomOn = v; },
+    particles: N,
+  };
+}
+
+/* =====================================================================================
+   7. App shell: quality switch rebuilds the scene (proves destroy() frees memory).
+   ===================================================================================== */
+(function boot() {
+  const stage = document.getElementById("stage"), labels = document.getElementById("labels");
+  const $ = id => document.getElementById(id);
+  const ui = {
+    info: text => { $("info").textContent = text; },
+    stats: (fps, calls, parts, tris, geo, tex) => {
+      $("sFps").textContent = Math.round(fps); $("sCalls").textContent = calls;
+      $("sParts").textContent = parts >= 1000 ? Math.round(parts / 1000) + "k" : parts;
+      $("sTris").textContent = Math.round(tris / 1000); $("sGeo").textContent = geo; $("sTex").textContent = tex;
+    },
+  };
+  if (!window.THREE || !THREE.OrbitControls || !THREE.EffectComposer || !THREE.UnrealBloomPass) {
+    const fb = document.createElement("div"); fb.className = "fallback"; fb.textContent = "Не удалось загрузить three.js. Проверьте интернет и обновите страницу.";
+    document.body.appendChild(fb); return;
+  }
+  const probe = document.createElement("canvas");
+  if (!(probe.getContext("webgl2") || probe.getContext("webgl"))) {
+    const fb = document.createElement("div"); fb.className = "fallback"; fb.textContent = "WebGL недоступен на этом устройстве.";
+    document.body.appendChild(fb); return;
+  }
+  let app = null, bloomOn = true, paused = false;
+  function start(q) {
+    if (app) app.destroy();
+    const preset = q === "auto" ? autoPreset() : q;
+    app = create(stage, labels, preset, ui);
+    app.setBloom(bloomOn); app.setPaused(paused);
+    ui.info(`Сцена собрана: ${preset === "high" ? "высокое" : preset === "medium" ? "среднее" : "низкое"} качество, ${Math.round(app.particles / 1000)}k частиц.`);
+  }
+  $("quality").addEventListener("change", e => start(e.target.value));
+  $("bloomBtn").addEventListener("click", e => { bloomOn = !bloomOn; e.target.setAttribute("aria-pressed", String(bloomOn)); app && app.setBloom(bloomOn); });
+  $("pauseBtn").addEventListener("click", e => { paused = !paused; e.target.setAttribute("aria-pressed", String(paused)); e.target.textContent = paused ? "Пуск" : "Пауза"; app && app.setPaused(paused); });
+  $("hudToggle").addEventListener("click", e => { const h = $("hud"); const min = h.classList.toggle("min"); e.target.textContent = min ? "+" : "—"; e.target.setAttribute("aria-expanded", String(!min)); });
+  if (matchMedia("(max-width: 560px)").matches) { $("hud").classList.add("min"); $("hudToggle").textContent = "+"; $("hudToggle").setAttribute("aria-expanded", "false"); }
+  addEventListener("pagehide", () => { if (app) { app.destroy(); app = null; } });
+  start("auto");
+})();
+</script>

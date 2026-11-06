@@ -1,0 +1,499 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Nam Tour сотув агенти</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Unbounded:wght@500;700&family=Golos+Text:wght@400;500;600&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: one dark 3D "stage" (channels → agent → results) followed by a calm reading column.
+   Palette taken from Iznik / Samarkand tilework: cobalt, turquoise, saffron. */
+:root {
+  --bg: #EEF2F6;
+  --fg: #142030;
+  --muted: #56657A;
+  --line: #CBD5E1;
+  --card: #FFFFFF;
+  --cobalt: #1D4E9E;
+  --turq: #0F8A87;
+  --saffron: #B87A12;
+  --ready-bg: #DDF3F1;
+  --plan-bg: #F8EBD3;
+  --stage: #0A1322;
+  --stage-fg: #E7EEF7;
+  --stage-muted: #8EA0B8;
+  --font-display: "Unbounded", "Segoe UI", system-ui, sans-serif;
+  --font-body: "Golos Text", "Segoe UI", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "SFMono-Regular", Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0D1420; --fg: #E6ECF3; --muted: #9AA9BD; --line: #26354A; --card: #142033;
+    --cobalt: #7FA6EE; --turq: #45C9C3; --saffron: #E6B04F; --ready-bg: #12302F; --plan-bg: #33280F;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0D1420; --fg: #E6ECF3; --muted: #9AA9BD; --line: #26354A; --card: #142033;
+  --cobalt: #7FA6EE; --turq: #45C9C3; --saffron: #E6B04F; --ready-bg: #12302F; --plan-bg: #33280F;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body {
+  background: var(--bg); color: var(--fg); font-family: var(--font-body); font-size: 16px; line-height: 1.55;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 28px 64px;
+}
+.wrap { max-width: 1120px; margin: 0 auto; display: flex; flex-direction: column; gap: 48px; }
+h1, h2 { font-family: var(--font-display); text-wrap: balance; margin: 0; letter-spacing: -0.01em; }
+h1 { font-size: clamp(1.6rem, 4.2vw, 2.6rem); line-height: 1.15; font-weight: 700; }
+h2 { font-size: clamp(1.15rem, 2.4vw, 1.5rem); font-weight: 500; }
+p { margin: 0; }
+.eyebrow { font-family: var(--font-mono); font-size: 0.75rem; letter-spacing: 0.12em; text-transform: uppercase; color: var(--turq); }
+.lede { color: var(--muted); max-width: 62ch; font-size: 1.05rem; }
+header { display: flex; flex-direction: column; gap: 12px; }
+
+/* ---------- 3D stage ---------- */
+.stage-grid { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 16px; align-items: stretch; }
+.stage {
+  position: relative; background: var(--stage); border-radius: 18px; overflow: hidden;
+  height: clamp(380px, 62vh, 580px); touch-action: pan-y; cursor: grab;
+  background-image: radial-gradient(circle at 50% 45%, rgba(43,179,177,0.18), transparent 55%);
+}
+.stage:active { cursor: grabbing; }
+.stage canvas { display: block; width: 100%; height: 100%; }
+.labels { position: absolute; inset: 0; pointer-events: none; }
+.node-label {
+  position: absolute; transform: translate(-50%, -50%); pointer-events: auto; white-space: nowrap;
+  font: 600 0.78rem/1 var(--font-body); color: var(--stage-fg); background: rgba(10,19,34,0.78);
+  border: 1px solid rgba(231,238,247,0.22); border-radius: 999px; padding: 6px 10px; cursor: pointer;
+  transition: border-color .2s, background .2s;
+}
+.node-label.planned { color: #F2C66D; border-style: dashed; border-color: rgba(242,198,109,0.55); }
+.node-label.core { font-family: var(--font-display); font-size: 0.85rem; padding: 8px 14px; background: rgba(15,138,135,0.85); border-color: transparent; }
+.node-label[aria-pressed="true"] { border-color: #F2C66D; background: rgba(29,78,158,0.9); }
+.node-label:focus-visible { outline: 2px solid #F2C66D; outline-offset: 2px; }
+.stage-legend { position: absolute; left: 14px; bottom: 12px; display: flex; gap: 14px; flex-wrap: wrap; font: 0.72rem var(--font-mono); color: var(--stage-muted); pointer-events: none; }
+.stage-legend span::before { content: ""; display: inline-block; width: 18px; height: 0; border-top: 2px solid #45C9C3; vertical-align: middle; margin-right: 6px; }
+.stage-legend span.p::before { border-top: 2px dashed #F2C66D; }
+.stage-hint { position: absolute; right: 14px; top: 12px; font: 0.72rem var(--font-mono); color: var(--stage-muted); pointer-events: none; }
+.fallback { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; padding: 24px; color: var(--stage-fg); text-align: center; }
+
+.detail { background: var(--card); border: 1px solid var(--line); border-radius: 18px; padding: 22px; display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.detail h3 { font-family: var(--font-display); font-weight: 500; font-size: 1.1rem; margin: 0; text-wrap: balance; }
+.chip { align-self: flex-start; font: 600 0.72rem var(--font-mono); letter-spacing: 0.06em; text-transform: uppercase; padding: 4px 9px; border-radius: 6px; }
+.chip.ready { background: var(--ready-bg); color: var(--turq); }
+.chip.plan { background: var(--plan-bg); color: var(--saffron); }
+.detail ul { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 6px; color: var(--fg); }
+.detail .ex { font-family: var(--font-mono); font-size: 0.8rem; color: var(--muted); border-left: 2px solid var(--line); padding-left: 10px; white-space: pre-wrap; overflow-wrap: anywhere; }
+
+/* ---------- funnel ---------- */
+.flow { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; counter-reset: step; }
+.step { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 14px; display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.step b { font-family: var(--font-mono); font-size: 0.72rem; color: var(--turq); letter-spacing: 0.08em; }
+.step strong { font-weight: 600; }
+.step span { color: var(--muted); font-size: 0.88rem; }
+.step.final { border-color: var(--turq); }
+
+/* ---------- ready vs full ---------- */
+.cols { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.col { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.col h2 { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.feat { display: grid; grid-template-columns: 28px minmax(0,1fr); gap: 10px; padding: 12px 0; border-top: 1px solid var(--line); }
+.feat:first-of-type { border-top: 0; }
+.feat .mk { width: 22px; height: 22px; border-radius: 6px; display: grid; place-items: center; font: 700 0.75rem var(--font-mono); }
+.ready .mk { background: var(--ready-bg); color: var(--turq); }
+.plan .mk { background: var(--plan-bg); color: var(--saffron); }
+.feat p { color: var(--muted); font-size: 0.92rem; }
+.feat strong { display: block; font-weight: 600; }
+
+/* ---------- chat + cost ---------- */
+.duo { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 0.9fr); gap: 16px; align-items: start; }
+.phone { background: var(--card); border: 1px solid var(--line); border-radius: 22px; padding: 16px; display: flex; flex-direction: column; gap: 8px; }
+.phone .top { font: 600 0.8rem var(--font-mono); color: var(--muted); padding-bottom: 8px; border-bottom: 1px solid var(--line); }
+.msg { max-width: 86%; padding: 9px 12px; border-radius: 14px; font-size: 0.9rem; white-space: pre-line; overflow-wrap: anywhere; }
+.msg.in { align-self: flex-start; background: var(--bg); border-bottom-left-radius: 4px; }
+.msg.out { align-self: flex-end; background: var(--cobalt); color: #fff; border-bottom-right-radius: 4px; }
+:root[data-theme="dark"] .msg.out { color: #0D1420; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .msg.out { color: #0D1420; } }
+.card-mgr { margin-top: 6px; font-family: var(--font-mono); font-size: 0.78rem; background: var(--ready-bg); color: var(--fg); border-radius: 10px; padding: 10px 12px; white-space: pre-line; }
+.cost { display: flex; flex-direction: column; gap: 10px; }
+.cost table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+.cost td { padding: 10px 0; border-top: 1px solid var(--line); vertical-align: top; }
+.cost td:last-child { text-align: right; font-family: var(--font-mono); white-space: nowrap; padding-left: 12px; }
+.cost tr.sum td { font-weight: 600; border-top: 2px solid var(--fg); }
+.note { color: var(--muted); font-size: 0.85rem; }
+section { display: flex; flex-direction: column; gap: 16px; }
+
+@media (max-width: 860px) {
+  .stage-grid, .cols, .duo { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 480px) {
+  .node-label { font-size: 0.68rem; padding: 5px 8px; }
+  .node-label.core { font-size: 0.74rem; }
+}
+</style>
+
+<div class="wrap">
+  <header>
+    <span class="eyebrow">JIHAN JAN JASUR NAM TOUR MCHJ</span>
+    <h1>Тўлиқ сотув агенти: мижоз ёзгандан аризагача</h1>
+    <p class="lede">Агент ўз ноутбукингизда ишлайди ва интернет орқали мижозларга уланади. У Instagram, WhatsApp, Telegram ва телефондан келган ҳар бир мижозга ўзбек, турк ва рус тилида жавоб беради. Паспорт текшируви, депорт ва иш ҳужжатлари бўйича нархни айтади ва мижозни аризагача олиб боради. Ҳужжат ва овозли хабарларни қабул қилади, олдиндан тўлов маълумотини юборади ва тайёр аризани менежерга узатади.</p>
+  </header>
+
+  <section aria-labelledby="s-3d">
+    <h2 id="s-3d">Агент қандай ишлайди</h2>
+    <div class="stage-grid">
+      <div class="stage" id="stage" aria-label="3D схема: чапда мижоз каналлари, марказда агент, ўнгда натижалар">
+        <div class="labels" id="labels"></div>
+        <div class="stage-legend"><span>тайёр</span><span class="p">кейинги босқич</span></div>
+        <div class="stage-hint">айлантириш учун суринг · номни босинг</div>
+      </div>
+      <aside class="detail" id="detail" aria-live="polite"></aside>
+    </div>
+  </section>
+
+  <section aria-labelledby="s-flow">
+    <h2 id="s-flow">Мижоз йўли: депорт бўйича мисол</h2>
+    <div class="flow">
+      <div class="step"><b>1</b><strong>Салом</strong><span>Агент компания номини ва учта хизматни нархи билан кўрсатади</span></div>
+      <div class="step"><b>2</b><strong>Хизмат ва нарх</strong><span>«Депорт 3 йиллик» → 2 600 $, олдиндан тўлов 600 $</span></div>
+      <div class="step"><b>3</b><strong>Ҳужжатлар</strong><span>Мижоз сўраса, рўйхатни беради, PDF WhatsApp орқали</span></div>
+      <div class="step"><b>4</b><strong>Исм</strong><span>Telegram профилидан олинади ёки сўралади</span></div>
+      <div class="step"><b>5</b><strong>Телефон</strong><span>WhatsApp ва қўнғироқда рақам ўзи маълум</span></div>
+      <div class="step"><b>6</b><strong>Тафсилот</strong><span>«Депорт қачон ва неча йилга қўйилган?»</span></div>
+      <div class="step"><b>7</b><strong>Тасдиқ</strong><span>Хулоса: хизмат, сумма, олдиндан тўлов → «ҳа»</span></div>
+      <div class="step final"><b>8</b><strong>Ариза ✓</strong><span>Менежерга тўлиқ карточка келади</span></div>
+    </div>
+  </section>
+
+  <section aria-labelledby="s-cols">
+    <h2 id="s-cols" class="visually-hidden" style="position:absolute;left:-9999px">Имкониятлар</h2>
+    <div class="cols">
+      <div class="col ready">
+        <h2>Асосий версия <span class="chip ready">тайёр</span></h2>
+        <div class="feat"><span class="mk">✓</span><div><strong>4 тил ўзи аниқланади</strong><p>Ўзбек лотин ва кирилл, турк, рус. Хизмат номлари ҳам мижоз тилида.</p></div></div>
+        <div class="feat"><span class="mk">✓</span><div><strong>5 канал</strong><p>Instagram Direct, WhatsApp, Telegram (Business ҳам), Messenger, Twilio орқали телефон.</p></div></div>
+        <div class="feat"><span class="mk">✓</span><div><strong>Нарх фақат каталогдан</strong><p>80 $, 2 600 $, 800 $. Агент чегирма ёки виза кафолатини ваъда қилмайди.</p></div></div>
+        <div class="feat"><span class="mk">✓</span><div><strong>Ҳужжатлар рўйхати</strong><p>Vergi levhası, İmza sirküleri, Oda sicil kaydı, Gelir beyannamesi, İşletme belgesi.</p></div></div>
+        <div class="feat"><span class="mk">✓</span><div><strong>Менежерга ариза карточкаси</strong><p>Канал, исм, телефон, хизмат, сумма, олдиндан тўлов. «Оператор» деса, суҳбат менежерга ўтади.</p></div></div>
+        <div class="feat"><span class="mk">✓</span><div><strong>Лидлар ҳисоботи</strong><p>/leads ва /lead буйруқлари: ким, қайси каналдан, қайси босқичда, конверсия неча фоиз.</p></div></div>
+      </div>
+      <div class="col ready">
+        <h2>Тўлиқ версияда қўшилди <span class="chip ready">тайёр</span></h2>
+        <div class="feat"><span class="mk">✓</span><div><strong>Паспорт ва PDF қабул қилиш</strong><p>Мижоз сканни чатга юборади, файл сақланади ва менежерга Telegram'да келади. /files 12 — рўйхат.</p></div></div>
+        <div class="feat"><span class="mk">✓</span><div><strong>Овозли хабарларни тушуниш</strong><p>Telegram ва WhatsApp'даги овозли хабар матнга айлантирилади ва агент жавоб беради.</p></div></div>
+        <div class="feat"><span class="mk">✓</span><div><strong>Олдиндан тўлов</strong><p>Тасдиқдан кейин карта рақами ёки Payme / Click ҳаволаси. Менежер /paid ёзса, мижозга «тўлов қабул қилинди».</p></div></div>
+        <div class="feat"><span class="mk">✓</span><div><strong>Эслатмалар</strong><p>Аризани ярмида ташлаган мижозга 20 соатдан кейин битта эслатма, кейинги савол билан.</p></div></div>
+        <div class="feat"><span class="mk">✓</span><div><strong>Менежер бот орқали жавоб ёзади</strong><p>/reply 12 матн — жавоб мижоз ёзган каналга (Instagram, WhatsApp, Telegram) боради. Паспорт текшируви натижаси шу билан юборилади.</p></div></div>
+        <div class="feat"><span class="mk">✓</span><div><strong>Google Sheets жадвали</strong><p>Ҳар бир ариза ва тўлов жадвалга тушади. Барча лидларни CSV бўлиб юклаб олиш мумкин.</p></div></div>
+        <div class="feat"><span class="mk">✓</span><div><strong>Паспорт натижасидан кейинги таклиф</strong><p>/result 12 ban — мижоз натижани ва депорт таклифини олади (2 600 $). «Ҳа» деса, исм ва телефон қайта сўралмайди. 80 $ лик мижоз 2 600 $ лик мижозга айланиши мумкин.</p></div></div>
+        <div class="feat"><span class="mk">✓</span><div><strong>Instagram изоҳлари</strong><p>Пост остига «нархи?» деган мижозга агент Direct'да ўзи ёзади ва изоҳга «Директ'га юбордик ✅» деб жавоб қолдиради.</p></div></div>
+        <div class="feat"><span class="mk">✓</span><div><strong>Ўрганадиган билимлар базаси</strong><p>Агент фақат тасдиқланган жавоб беради. Билмаган савол менежерга боради, /answer билан берилган жавоб базага ёзилади ва кейинги сафар агент ўзи жавоб беради.</p></div></div>
+        <div class="feat plan"><span class="mk">+</span><div><strong>Кейинги босқич</strong><p>Payme / Click тўловини автоматик текшириш ва телефонда ўзбекча овоз.</p></div></div>
+      </div>
+    </div>
+  </section>
+
+  <section aria-labelledby="s-where">
+    <h2 id="s-where">Агент қаерда яшайди</h2>
+    <div class="cols">
+      <div class="col ready">
+        <h2>Ноутбукда <span class="chip ready">ташқарига чиқмайди</span></h2>
+        <div class="feat"><span class="mk">●</span><div><strong>Агент ва суҳбат қоидалари</strong><p>Интернет ёки AI ишламай қолса ҳам, агент қоидалар асосида жавоб беришда давом этади.</p></div></div>
+        <div class="feat"><span class="mk">●</span><div><strong>База: мижозлар, аризалар, ёзишмалар</strong><p>Ҳар бир мижоз ва унинг бутун суҳбати шу ерда сақланади.</p></div></div>
+        <div class="feat"><span class="mk">●</span><div><strong>Паспорт, PDF ва расмлар</strong><p>Мижоз юборган ҳужжатлар ноутбук дискида туради ва AI'га юборилмайди.</p></div></div>
+        <div class="feat"><span class="mk">●</span><div><strong>Каталог ва тўлов ҳаволаси</strong><p>Нархлар ва ҳужжатлар рўйхати. Тўлов ҳаволаси шу ерда тузилади.</p></div></div>
+      </div>
+      <div class="col plan">
+        <h2>Интернет ва булут орқали <span class="chip plan">керак бўлганда</span></h2>
+        <div class="feat"><span class="mk">↔</span><div><strong>Мижоз каналлари</strong><p>Telegram тўғридан-тўғри уланади. Instagram ва WhatsApp ноутбукка Cloudflare Tunnel орқали етиб келади.</p></div></div>
+        <div class="feat"><span class="mk">↔</span><div><strong>AI: Claude Haiku 5.5</strong><p>Мижоз хабари ва каталог юборилади, жавоб табиийроқ бўлади. База ва паспортлар юборилмайди.</p></div></div>
+        <div class="feat"><span class="mk">↔</span><div><strong>Овоз: Scribe / OpenAI ва Azure</strong><p>Овозли хабар матнга айланади, жавоб эса ўзбек, рус, турк ёки инглиз тилида овоз билан қайтади.</p></div></div>
+        <div class="feat"><span class="mk">↔</span><div><strong>Google Sheets ва Google Drive</strong><p>Аризалар жадвалга тушади. База ва ҳужжатлардан ҳар куни захира нусха олинади, ноутбук бузилса ҳам ҳеч нарса йўқолмайди.</p></div></div>
+      </div>
+    </div>
+    <p class="note">Агент интернетдан маълумот қидирмайди: виза ва депорт ҳақидаги маълумотни фақат каталогдан олади, уни менежер янгилайди. Ноутбук ёқиқ ва интернетга уланган бўлиши керак, акс ҳолда агент жим қолади.</p>
+  </section>
+
+  <section aria-labelledby="s-duo">
+    <h2 id="s-duo">Instagram'да суҳбат шундай кўринади</h2>
+    <div class="duo">
+      <div class="phone" role="img" aria-label="Мижоз ва агент ўртасидаги суҳбат намунаси">
+        <div class="top">Instagram Direct · мижоз</div>
+        <div class="msg in">Deportim bor 3 yillik, narxi qancha?</div>
+        <div class="msg out">Deportni olib tashlash (1 yildan 5 yilgacha) — 2 600 $. Oldindan to'lov: 600 $.
+Arizani rasmiylashtiramiz: ismingiz nima?</div>
+        <div class="msg in">Ismim Bekzod</div>
+        <div class="msg out">Rahmat, Bekzod! Telefon raqamingizni yozing.</div>
+        <div class="msg in">+998 91 222 33 44</div>
+        <div class="msg out">Deport qachon va necha yilga qo'yilgan (1–5 yil)?</div>
+        <div class="msg in">2025-yil mart, 3 yilga</div>
+        <div class="msg out">Arizangizni tekshiring:
+• Deportni olib tashlash, 1 kishi — 2 600 $ (oldindan to'lov 600 $)
+• Bekzod, +998912223344
+Hammasi to'g'rimi?</div>
+        <div class="msg in">ha</div>
+        <div class="msg out">Rahmat! Arizangiz №1 qabul qilindi ✅</div>
+        <div class="card-mgr">Менежерга (Telegram):
+✅ Янги ариза — лид #1 · Instagram
+Мижоз: Bekzod · +998912223344
+Хизмат: Депорт × 1 = 2 600 $
+Олдиндан тўлов: 600 $</div>
+      </div>
+      <div class="cost">
+        <h2>Ойлик харажат: ноутбук + булут, 1000 мижоз</h2>
+        <table>
+          <tr><td>Сервер: ўз ноутбукингиз</td><td>0 $</td></tr>
+          <tr><td>Cloudflare Tunnel (Instagram, WhatsApp учун)</td><td>0 $</td></tr>
+          <tr><td>Домен (йилига ~10 $)</td><td>~1 $</td></tr>
+          <tr><td>AI жавоблар (Claude Haiku 5.5)</td><td>5–10 $</td></tr>
+          <tr><td>Овозли хабарни матнга (Scribe / OpenAI)</td><td>2–5 $</td></tr>
+          <tr><td>Ўзбекча овозли жавоб (Azure Madina / Sardor)</td><td>0–4 $</td></tr>
+          <tr><td>WhatsApp (Meta тўлови)</td><td>0–10 $</td></tr>
+          <tr><td>Telegram, Instagram</td><td>0 $</td></tr>
+          <tr><td>Захира нусха (Google Drive, 15 ГБ бепул)</td><td>0 $</td></tr>
+          <tr class="sum"><td>Телефонсиз жами</td><td>≈ 8–30 $</td></tr>
+          <tr><td>Телефон қўнғироқлари, агар уланса (~900 дақиқа)</td><td>+ 50–100 $</td></tr>
+        </table>
+        <p class="note">Тахминий ҳисоб: бир мижоз билан 10 та хабар; ҳар 10 мижоздан 3 таси жами 1 дақиқа овозли хабар юборади ва овоз билан жавоб олади. Azure ойлик бепул лимити кичик ҳажмни қоплаши мумкин. Ноутбук учун фақат электр сарфи. Телефон линияси нархи провайдерга боғлиқ ва ҳали текширилмаган. Аввалги ҳисоб (VPS билан): ≈ 15–30 $, овозсиз.</p>
+      </div>
+    </div>
+  </section>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+(function () {
+  const NODES = {
+    core: { label: "Сотув агенти", kind: "core", status: "ready",
+      title: "Сотув агенти (марказ)",
+      points: ["Мижоз тилини аниқлайди: ўзбек, турк, рус", "Нархни фақат каталогдан айтади", "Хизмат → неча киши → исм → телефон → тафсилот → тасдиқ", "Тайёр аризани менежерга юборади"],
+      ex: "Кун-у тун ишлайди, бир вақтда юзлаб мижоз билан гаплаша олади." },
+    ig: { side: "in", label: "Instagram", color: 0xE1306C, status: "ready", title: "Instagram Direct",
+      points: ["Директга ёзган ҳар бир мижозга дарҳол жавоб", "Meta webhook, ҳар бир сўровнинг имзоси текширилади", "Реклама кўриб ёзганлар ҳам шу ерга тушади"],
+      ex: "Мижоз: «Pasaport sorgulama ne kadar?»\nАгент: «Pasaport sorgulama — 80 $. Sonuç: 12 saat içinde.»" },
+    wa: { side: "in", label: "WhatsApp", color: 0x25D366, status: "ready", title: "WhatsApp Business",
+      points: ["Рақам ва исм ўзи маълум, қайта сўралмайди", "Ҳужжатлар PDF кўринишида шу ерга юборилади", "Мижоз ёзган 24 соат ичида эркин жавоб"],
+      ex: "WhatsApp'да агент телефонни сўрамайди, тўғри тафсилотга ўтади." },
+    tg: { side: "in", label: "Telegram", color: 0x2AABEE, status: "ready", title: "Telegram бот ва Business",
+      points: ["Мижозлар учун алоҳида бот", "Telegram Business: компания аккаунти номидан жавоб", "«📞 Рақамни юбориш» тугмаси"],
+      ex: "Энг осон канал: бот токени бўлса, ўша куни ишга тушади." },
+    ms: { side: "in", label: "Messenger", color: 0x5B8CFF, status: "ready", title: "Facebook Messenger",
+      points: ["Facebook саҳифасига ёзганларга жавоб", "Instagram билан битта webhook"],
+      ex: "Ихтиёрий канал, Facebook саҳифаси бўлса уланади." },
+    ph: { side: "in", label: "Телефон", color: 0xE0A43A, status: "ready", title: "Телефон қўнғироқлари",
+      points: ["Агент гапни таниб, овоз билан жавоб беради", "Қўнғироқ қилган рақам мижоз телефони сифатида олинади", "Ариза тасдиқлангач, қўнғироқни ўзи тугатади"],
+      ex: "Ҳозир турк овози ўқийди. Кейинги қадам: Azure'нинг ўзбекча Madina ва Sardor овозлари." },
+    voice: { side: "in", label: "Овозли хабар", color: 0x9B7BFF, status: "ready", title: "Овозли хабарлар",
+      points: ["Telegram ва WhatsApp'даги овозли хабар матнга айлантирилади", "Агент унга оддий хабардек жавоб беради", "Тушунилмаса, мижоздан ёзишни сўрайди, овоз менежерга кетади"],
+      ex: "OpenAI калити керак (овозни матнга айлантириш учун)." },
+    uzvoice: { side: "in", label: "Ўзбекча овоз", color: 0xF2C66D, status: "plan", title: "Телефонда ўзбекча овоз",
+      points: ["Ҳозир телефонда жавобни турк овози ўқийди", "Azure Madina (аёл) ва Sardor (эркак) — ҳақиқий ўзбекча овоз", "Рус, турк ва инглиз тилидаги овозлар ҳам шу хизматда", "Telegram ва WhatsApp'да овозга овоз билан жавоб"],
+      ex: "Нархи: 1 млн белгига ~15 $, ойлик бепул лимит бор (тахминий)." },
+    scan: { side: "in", label: "Паспорт / PDF", color: 0xC9D4E5, status: "ready", title: "Паспорт ва ҳужжат сканлари",
+      points: ["Мижоз юборган PDF ва расм аризага бириктирилади ва серверда сақланади", "Менежерга Telegram'да ҳужжат бўлиб келади", "/files 12 — мижоз юборган ҳамма ҳужжатлар рўйхати"],
+      ex: "Мижоз: [vergi_levhasi.pdf]\nАгент: «Hujjat qabul qilindi ✅ (jami 1 ta)»" },
+    mgr: { side: "out", label: "Менежер", color: 0x45C9C3, status: "ready", title: "Менежерга ариза",
+      points: ["Telegram'га тўлиқ карточка: исм, телефон, хизмат, сумма", "«Оператор» деса, суҳбат менежерга ўтади", "Чегирма сўровлари ҳам менежерга"],
+      ex: "✅ Янги ариза — лид #1\nХизмат: Депорт × 1 = 2 600 $\nОлдиндан тўлов: 600 $" },
+    db: { side: "out", label: "Аризалар базаси", color: 0x45C9C3, status: "ready", title: "Аризалар ва ёзишмалар",
+      points: ["Ҳар бир мижоз ва унинг бутун ёзишмаси сақланади", "Такрорий хабарлар иккинчи марта ишланмайди", "Сервер қайта ёқилганда ҳеч нарса йўқолмайди"],
+      ex: "/lead 1 — мижоз билан бутун суҳбатни кўриш." },
+    rep: { side: "out", label: "Ҳисобот /leads", color: 0x45C9C3, status: "ready", title: "Лидлар ҳисоботи",
+      points: ["Охирги лидлар: канал, босқич, хизмат", "Неча фоизи аризагача етгани"],
+      ex: "🧲 Лидлар. Жами: 120, сотилган: 34 (28%)" },
+    pay: { side: "out", label: "Олдиндан тўлов", color: 0x45C9C3, status: "ready", title: "Олдиндан тўлов",
+      points: ["Тасдиқдан кейин мижозга карта рақами ёки Payme / Click ҳаволаси", "Доллар курс бўйича сўмга ўгирилади", "Менежер /paid 12 ёзади, мижозга «тўлов қабул қилинди» боради"],
+      ex: "Oldindan to'lov: 600 $ (≈ 7 680 000 so'm)\nKarta: 8600 …\nIzohda ariza raqamini yozing: №12." },
+    autopay: { side: "out", label: "Тўловни авто-текшириш", color: 0xF2C66D, status: "plan", title: "Payme / Click автоматик тасдиғи",
+      points: ["Payme ва Click merchant API уланса, тўлов ўзи белгиланади", "Ҳозир менежер /paid билан белгилайди"],
+      ex: "Кейинги босқич: Payme ёки Click шартномаси керак." },
+    remind: { side: "out", label: "Жавоб ва эслатма", color: 0x45C9C3, status: "ready", title: "Менежер жавоби ва эслатмалар",
+      points: ["/reply 12 матн — мижоз ёзган каналга боради", "Паспорт текшируви натижасини шу билан юборасиз", "Ярмида тўхтаган мижозга 20 соатдан кейин битта эслатма"],
+      ex: "👤 Menejer: Pasportingiz tekshirildi, taqiq yo'q ✅" },
+    sheet: { side: "out", label: "Google Sheets", color: 0x45C9C3, status: "ready", title: "Жадвал",
+      points: ["Ҳар бир тасдиқланган ариза ва тўлов Google Sheets'га қатор бўлиб тушади", "Барча лидлар CSV бўлиб юклаб олинади (Excel учун)"],
+      ex: "Вақт · Лид · Канал · Исм · Телефон · Хизмат · Жами · Олдиндан тўлов · Тўланган" },
+  };
+
+  const detail = document.getElementById("detail");
+  const labelsEl = document.getElementById("labels");
+  const stage = document.getElementById("stage");
+  const buttons = {};
+  let selected = "core";
+
+  function renderDetail(id) {
+    const n = NODES[id];
+    detail.innerHTML = "";
+    const chip = document.createElement("span");
+    chip.className = "chip " + (n.status === "ready" ? "ready" : "plan");
+    chip.textContent = n.status === "ready" ? "тайёр" : "кейинги босқич";
+    const h = document.createElement("h3"); h.textContent = n.title;
+    const ul = document.createElement("ul");
+    n.points.forEach(p => { const li = document.createElement("li"); li.textContent = p; ul.appendChild(li); });
+    const ex = document.createElement("p"); ex.className = "ex"; ex.textContent = n.ex;
+    detail.append(chip, h, ul, ex);
+    Object.entries(buttons).forEach(([k, b]) => b.setAttribute("aria-pressed", String(k === id)));
+  }
+  function select(id) { selected = id; renderDetail(id); }
+
+  Object.entries(NODES).forEach(([id, n]) => {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.className = "node-label" + (n.kind === "core" ? " core" : "") + (n.status === "plan" ? " planned" : "");
+    b.textContent = n.label;
+    b.addEventListener("click", () => select(id));
+    labelsEl.appendChild(b);
+    buttons[id] = b;
+  });
+  renderDetail(selected);
+
+  let renderer;
+  try {
+    if (!window.THREE) throw new Error("no three");
+    renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+  } catch (e) {
+    const fb = document.createElement("div"); fb.className = "fallback";
+    fb.textContent = "3D кўриниш бу қурилмада очилмади. Номларни босиб, ҳар бир қисмни ўқинг.";
+    stage.appendChild(fb);
+    // place labels in a simple grid so they stay usable
+    labelsEl.style.position = "static"; labelsEl.style.display = "flex"; labelsEl.style.flexWrap = "wrap";
+    labelsEl.style.gap = "8px"; labelsEl.style.padding = "16px";
+    Object.values(buttons).forEach(b => { b.style.position = "static"; b.style.transform = "none"; });
+    return;
+  }
+
+  const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+  stage.insertBefore(renderer.domElement, labelsEl);
+
+  const scene = new THREE.Scene();
+  const camera = new THREE.PerspectiveCamera(42, 1, 0.1, 100);
+  camera.position.set(0, 1.6, 11);
+  camera.lookAt(0, 0, 0);
+
+  scene.add(new THREE.AmbientLight(0x8fa6c6, 0.65));
+  const key = new THREE.PointLight(0xffffff, 1.1, 40); key.position.set(4, 6, 8); scene.add(key);
+  const rim = new THREE.PointLight(0x2bb3b1, 1.2, 30); rim.position.set(-6, -2, 4); scene.add(rim);
+
+  const world = new THREE.Group(); scene.add(world);
+
+  // Core: an eight-pointed star, the girih motif shared by Iznik and Samarkand tiles
+  const star = new THREE.Shape();
+  for (let i = 0; i < 16; i++) {
+    const r = i % 2 === 0 ? 1.15 : 0.72, a = (i / 16) * Math.PI * 2 + Math.PI / 8;
+    const x = Math.cos(a) * r, y = Math.sin(a) * r;
+    i === 0 ? star.moveTo(x, y) : star.lineTo(x, y);
+  }
+  const coreGeo = new THREE.ExtrudeGeometry(star, { depth: 0.32, bevelEnabled: true, bevelThickness: 0.08, bevelSize: 0.06, bevelSegments: 2 });
+  coreGeo.center();
+  const core = new THREE.Mesh(coreGeo, new THREE.MeshStandardMaterial({ color: 0x2bb3b1, emissive: 0x0f5c5a, metalness: 0.35, roughness: 0.35 }));
+  world.add(core);
+  const halo = new THREE.Mesh(new THREE.TorusGeometry(1.75, 0.025, 8, 96), new THREE.MeshBasicMaterial({ color: 0xe0a43a, transparent: true, opacity: 0.7 }));
+  world.add(halo);
+  const halo2 = new THREE.Mesh(new THREE.TorusGeometry(2.05, 0.012, 8, 96), new THREE.MeshBasicMaterial({ color: 0x5b8cff, transparent: true, opacity: 0.45 }));
+  halo2.rotation.x = Math.PI / 2.6; world.add(halo2);
+
+  const coreAnchor = new THREE.Object3D(); coreAnchor.position.set(0, 1.55, 0); world.add(coreAnchor);
+  const anchors = { core: coreAnchor };
+  const flows = [];
+
+  function placeSide(ids, sign) {
+    const n = ids.length;
+    ids.forEach((id, i) => {
+      const t = n === 1 ? 0.5 : i / (n - 1);
+      const ang = (t - 0.5) * 2.1;
+      // Phone (tall stage): channels in two rows on top, results in two rows at the bottom, so nothing leaves the screen.
+      const portrait = stage.clientWidth < stage.clientHeight * 0.9;
+      const per = Math.ceil(n / 2), row = i < per ? 0 : 1, cnt = row ? n - per : per, col = row ? i - per : i;
+      const pos = portrait
+        ? new THREE.Vector3((col - (cnt - 1) / 2) * 2.0, -sign * (3.4 + row * 1.45), Math.sin(i * 1.7) * 0.4)
+        : new THREE.Vector3(sign * (4.4 - Math.abs(Math.sin(ang)) * 0.6), Math.sin(ang) * 3.0, Math.cos(ang * 1.3) * 1.2 - 0.4);
+      const node = NODES[id];
+      const plan = node.status === "plan";
+      const mesh = new THREE.Mesh(new THREE.SphereGeometry(plan ? 0.2 : 0.27, 24, 24),
+        new THREE.MeshStandardMaterial({ color: node.color, emissive: node.color, emissiveIntensity: plan ? 0.15 : 0.35, transparent: plan, opacity: plan ? 0.55 : 1, roughness: 0.4 }));
+      mesh.position.copy(pos); world.add(mesh);
+      const anchor = new THREE.Object3D(); anchor.position.copy(pos).add(new THREE.Vector3(0, portrait && sign > 0 ? -0.5 : 0.55, 0)); world.add(anchor);
+      anchors[id] = anchor;
+
+      const mid = pos.clone().multiplyScalar(0.5); mid.z += 1.6; mid.y *= 0.6;
+      const curve = sign < 0 ? new THREE.QuadraticBezierCurve3(pos, mid, new THREE.Vector3(0, 0, 0))
+                             : new THREE.QuadraticBezierCurve3(new THREE.Vector3(0, 0, 0), mid, pos);
+      const geo = new THREE.BufferGeometry().setFromPoints(curve.getPoints(48));
+      const mat = plan ? new THREE.LineDashedMaterial({ color: 0xf2c66d, dashSize: 0.18, gapSize: 0.14, transparent: true, opacity: 0.6 })
+                       : new THREE.LineBasicMaterial({ color: 0x45c9c3, transparent: true, opacity: 0.45 });
+      const line = new THREE.Line(geo, mat);
+      if (plan) line.computeLineDistances();
+      world.add(line);
+      if (!plan) {
+        for (let k = 0; k < 3; k++) {
+          const p = new THREE.Mesh(new THREE.SphereGeometry(0.06, 10, 10), new THREE.MeshBasicMaterial({ color: sign < 0 ? node.color : 0xf2c66d }));
+          world.add(p); flows.push({ curve, mesh: p, t: k / 3 + Math.random() * 0.1, speed: 0.12 + Math.random() * 0.05 });
+        }
+      }
+    });
+  }
+  placeSide(Object.keys(NODES).filter(k => NODES[k].side === "in"), -1);
+  placeSide(Object.keys(NODES).filter(k => NODES[k].side === "out"), 1);
+
+  // background "tile dust"
+  const dustGeo = new THREE.BufferGeometry();
+  const dust = new Float32Array(240 * 3);
+  for (let i = 0; i < dust.length; i += 3) { dust[i] = (Math.random() - 0.5) * 22; dust[i + 1] = (Math.random() - 0.5) * 12; dust[i + 2] = -4 - Math.random() * 8; }
+  dustGeo.setAttribute("position", new THREE.BufferAttribute(dust, 3));
+  scene.add(new THREE.Points(dustGeo, new THREE.PointsMaterial({ color: 0x8ea0b8, size: 0.04, transparent: true, opacity: 0.6 })));
+
+  // drag to rotate
+  let yaw = 0, pitch = 0, targetYaw = 0, targetPitch = 0, dragging = false, lastX = 0, lastY = 0, idle = 0;
+  renderer.domElement.addEventListener("pointerdown", e => { dragging = true; lastX = e.clientX; lastY = e.clientY; idle = 0; });
+  window.addEventListener("pointerup", () => { dragging = false; });
+  window.addEventListener("pointermove", e => {
+    if (!dragging) return;
+    targetYaw += (e.clientX - lastX) * 0.006; targetPitch += (e.clientY - lastY) * 0.004;
+    targetPitch = Math.max(-0.45, Math.min(0.45, targetPitch));
+    targetYaw = Math.max(-1.1, Math.min(1.1, targetYaw));
+    lastX = e.clientX; lastY = e.clientY;
+  });
+
+  function resize() {
+    const w = stage.clientWidth, h = stage.clientHeight;
+    renderer.setSize(w, h, false);
+    camera.aspect = w / h;
+    camera.position.z = w < h * 0.9 ? 18 : w < 560 ? 15.5 : w < 800 ? 13 : 11;
+    camera.updateProjectionMatrix();
+  }
+  new ResizeObserver(resize).observe(stage); resize();
+
+  const v = new THREE.Vector3();
+  const clock = new THREE.Clock();
+  function frame() {
+    const dt = Math.min(clock.getDelta(), 0.05), t = clock.elapsedTime;
+    if (!dragging) { idle += dt; if (!reduce && idle > 2) targetYaw = Math.sin(t * 0.18) * 0.35; }
+    yaw += (targetYaw - yaw) * 0.06; pitch += (targetPitch - pitch) * 0.06;
+    world.rotation.y = yaw; world.rotation.x = pitch;
+    if (!reduce) {
+      core.rotation.z += dt * 0.35; core.rotation.y = Math.sin(t * 0.6) * 0.35;
+      halo.rotation.z -= dt * 0.2; halo2.rotation.z += dt * 0.15;
+      flows.forEach(f => { f.t = (f.t + dt * f.speed) % 1; f.mesh.position.copy(f.curve.getPoint(f.t)); });
+    } else {
+      flows.forEach(f => f.mesh.position.copy(f.curve.getPoint(f.t)));
+    }
+    renderer.render(scene, camera);
+    const w = stage.clientWidth, h = stage.clientHeight;
+    Object.entries(anchors).forEach(([id, a]) => {
+      a.getWorldPosition(v); v.project(camera);
+      const b = buttons[id];
+      // keep every name fully inside the stage
+      const hw = b.offsetWidth / 2 + 6, hh = b.offsetHeight / 2 + 6;
+      b.style.left = Math.min(w - hw, Math.max(hw, (v.x * 0.5 + 0.5) * w)) + "px";
+      b.style.top = Math.min(h - hh, Math.max(hh + 22, (-v.y * 0.5 + 0.5) * h)) + "px";
+    });
+    requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+})();
+</script>

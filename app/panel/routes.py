@@ -1,4 +1,5 @@
 """Web panel: /panel (page) and /api/panel/* (data and actions, X-API-Token required).
+Visual schemes: /visual/ (static pages from the visual/ folder, demo data only, no client data).
 
 The API listens on 127.0.0.1 on the laptop and the Cloudflare tunnel exposes
 only /webhooks/, so the panel is reachable only from the laptop itself.
@@ -8,7 +9,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException, Request
-from fastapi.responses import HTMLResponse, Response
+from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from pydantic import BaseModel, Field
 
 from app.api.routes import require_token
@@ -17,6 +18,7 @@ from app.salesbot.models import LeadFile
 from app.security import audit
 
 PAGE = Path(__file__).with_name("panel.html")
+VISUAL = Path(__file__).resolve().parents[2] / "visual"
 
 page = APIRouter()
 panel = APIRouter(prefix="/api/panel", dependencies=[Depends(require_token)])
@@ -25,6 +27,20 @@ panel = APIRouter(prefix="/api/panel", dependencies=[Depends(require_token)])
 @page.get("/panel", response_class=HTMLResponse)
 async def panel_page() -> HTMLResponse:
     return HTMLResponse(PAGE.read_text(encoding="utf-8"), headers={"Cache-Control": "no-store"})
+
+
+@page.get("/visual", include_in_schema=False)
+async def visual_root() -> RedirectResponse:
+    return RedirectResponse("/visual/")
+
+
+@page.get("/visual/", response_class=HTMLResponse)
+@page.get("/visual/{name}", response_class=HTMLResponse)
+async def visual_page(name: str = "index.html") -> HTMLResponse:
+    pages = {p.name for p in VISUAL.glob("*.html")}  # only the top folder: templates/ and anything else stay out
+    if name not in pages:
+        raise HTTPException(404, "Бундай саҳифа йўқ")
+    return HTMLResponse((VISUAL / name).read_text(encoding="utf-8"), headers={"Cache-Control": "no-store"})
 
 
 def _sales(request: Request):
