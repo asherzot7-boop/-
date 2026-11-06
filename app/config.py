@@ -147,6 +147,14 @@ class Settings(BaseSettings):
     # Instagram comments: intent (reply to questions/prices only) | all | off
     sales_comment_mode: str = "intent"
 
+    @field_validator("*", mode="before")
+    @classmethod
+    def _empty_is_unset(cls, value: object, info) -> object:
+        # "SALES_USD_RATE=" in .env means "not set": an optional field gets None instead of failing to parse ""
+        if isinstance(value, str) and not value.strip() and cls.model_fields[info.field_name].default is None:
+            return None
+        return value
+
     @field_validator("director_ids", "staff_ids", "viewer_ids", "sales_manager_ids", mode="before")
     @classmethod
     def _ids(cls, value: object) -> list[int]:

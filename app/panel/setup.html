@@ -1,0 +1,147 @@
+<!doctype html>
+<html lang="uz">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Nam Tour — sozlamalar</title>
+<style>
+/* Same tilework palette as the panel: ink, turquoise, saffron on warm paper. */
+:root {
+  --paper: #F6F2EA; --card: #FFFDF8; --line: #E2D9C8; --ink: #0B1426; --muted: #5B6576;
+  --turq: #1F7F7A; --turq-soft: #E3F1EF; --saffron: #C98A1B; --danger: #B3261E; --ok: #1E7B45;
+  --font: "Segoe UI", system-ui, -apple-system, Roboto, Arial, sans-serif;
+  color-scheme: light;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--paper); color: var(--ink); font: 15px/1.5 var(--font); }
+header { background: var(--ink); color: #F4EFE4; }
+header .in { max-width: 920px; margin: 0 auto; padding: 18px 16px; display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+header b { font-size: 18px; } header small { display: block; color: #9FB0C6; font-weight: 400; }
+header a { color: #45C9C3; text-decoration: none; font-weight: 600; }
+main { max-width: 920px; margin: 0 auto; padding: 20px 16px 120px; }
+.lead { color: var(--muted); margin: 0 0 16px; }
+.status { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 20px; }
+.chip { padding: 6px 12px; border-radius: 999px; border: 1px solid var(--line); background: var(--card); font-size: 13px; font-weight: 600; color: var(--muted); }
+.chip.on { background: var(--turq-soft); border-color: #A9D6D1; color: var(--turq); }
+.chip.on::before { content: "✓ "; }
+details { background: var(--card); border: 1px solid var(--line); border-radius: 14px; margin: 0 0 12px; }
+summary { cursor: pointer; padding: 14px 18px; font-weight: 700; font-size: 16px; list-style: none; display: flex; justify-content: space-between; }
+summary::after { content: "＋"; color: var(--muted); } details[open] summary::after { content: "－"; }
+.fields { padding: 0 18px 16px; display: grid; gap: 14px; }
+label { display: grid; gap: 4px; font-weight: 600; font-size: 14px; }
+label .hint { font-weight: 400; color: var(--muted); font-size: 13px; }
+input, select { font: inherit; padding: 10px 12px; border: 1px solid #CFC5B2; border-radius: 10px; background: #fff; color: var(--ink); width: 100%; }
+input:focus, select:focus { outline: 2px solid var(--turq); outline-offset: 1px; border-color: var(--turq); }
+.set { color: var(--ok); font-weight: 600; font-size: 12px; }
+.bar { position: fixed; left: 0; right: 0; bottom: 0; background: rgba(246, 242, 234, .96); border-top: 1px solid var(--line); }
+.bar .in { max-width: 920px; margin: 0 auto; padding: 12px 16px; display: flex; gap: 12px; align-items: center; justify-content: space-between; flex-wrap: wrap; }
+button { font: 600 15px var(--font); padding: 11px 22px; border-radius: 10px; border: 0; background: var(--turq); color: #fff; cursor: pointer; }
+button:disabled { opacity: .6; cursor: default; }
+button:focus-visible { outline: 2px solid var(--saffron); outline-offset: 2px; }
+#msg { font-weight: 600; } #msg.err { color: var(--danger); } #msg.ok { color: var(--ok); }
+.login { max-width: 420px; margin: 60px auto; background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 24px; display: grid; gap: 12px; }
+</style>
+</head>
+<body>
+<header><div class="in"><div><b>Nam Tour agenti</b><small>Sozlamalar</small></div><a href="/panel">Panelga o‘tish →</a></div></header>
+<main id="main">
+  <p class="lead">Bo‘limlarni ochib, kalitlarni kiriting va «Saqlash» ni bosing. Maxfiy kalitlar ekranda ko‘rsatilmaydi: bo‘sh qoldirsangiz, avvalgisi saqlanib qoladi.</p>
+  <div class="status" id="status" aria-label="Ulangan imkoniyatlar"></div>
+  <form id="form"></form>
+</main>
+<div class="bar"><div class="in"><span id="msg" role="status"></span><button id="save" type="submit" form="form">Saqlash</button></div></div>
+<script>
+"use strict";
+const CH = { telegram: "Telegram bot", manager: "Menejer buyruqlari", ai: "AI", payment: "To‘lov", instagram: "Instagram", whatsapp: "WhatsApp", phone: "Telefon" };
+let token = "";
+try {
+  const m = location.hash.match(/token=([A-Za-z0-9_-]+)/);
+  if (m) { localStorage.setItem("panel_token", m[1]); history.replaceState(null, "", location.pathname); }
+  token = localStorage.getItem("panel_token") || "";
+} catch (e) {}
+const $ = id => document.getElementById(id);
+const msg = (t, cls) => { $("msg").textContent = t; $("msg").className = cls || ""; };
+
+function login() {
+  $("main").innerHTML = '<form class="login"><b>Panel paroli</b><span class="hint">Nam Tour yorlig‘i orqali ochsangiz, parol o‘zi kiritiladi.</span><input type="password" autocomplete="current-password" aria-label="Panel paroli"><button>Kirish</button></form>';
+  document.querySelector(".bar").hidden = true;
+  document.querySelector(".login").onsubmit = e => { e.preventDefault(); token = e.target.querySelector("input").value.trim(); try { localStorage.setItem("panel_token", token); } catch (x) {} location.reload(); };
+}
+
+function status(ch) {
+  $("status").replaceChildren(...Object.entries(CH).map(([k, name]) => {
+    const s = document.createElement("span"); s.className = "chip" + (ch[k] ? " on" : ""); s.textContent = name; return s;
+  }));
+}
+
+async function load() {
+  if (!token) return login();
+  const r = await fetch("/api/setup", { headers: { "X-API-Token": token } });
+  if (r.status === 401 || r.status === 403) return login();
+  const data = await r.json();
+  status(data.channels);
+  const form = $("form");
+  Object.entries(data.groups).forEach(([g, title], i) => {
+    const d = document.createElement("details"); if (i < 2) d.open = true;
+    const s = document.createElement("summary"); s.textContent = title; d.appendChild(s);
+    const box = document.createElement("div"); box.className = "fields";
+    data.fields.filter(f => f.group === g).forEach(f => {
+      const l = document.createElement("label"); l.textContent = f.label;
+      let input;
+      if (f.kind === "select") {
+        input = document.createElement("select");
+        f.options.forEach(o => { const op = document.createElement("option"); op.value = op.textContent = o; input.appendChild(op); });
+        input.value = f.value || f.options[0];
+      } else {
+        input = document.createElement("input");
+        input.type = f.kind === "secret" ? "password" : "text";
+        input.autocomplete = "off"; input.spellcheck = false;
+        if (f.kind === "secret") input.placeholder = f.set ? "yangisi bilan almashtirish" : "kiritilmagan";
+        else input.value = f.value || "";
+      }
+      input.name = f.key;
+      l.appendChild(input);
+      if (f.kind === "secret" && f.set) { const ok = document.createElement("span"); ok.className = "set"; ok.textContent = "✓ saqlangan"; l.appendChild(ok); }
+      if (f.hint) { const h = document.createElement("span"); h.className = "hint"; h.textContent = f.hint; l.appendChild(h); }
+      box.appendChild(l);
+    });
+    d.appendChild(box); form.appendChild(d);
+  });
+  form.onsubmit = save;
+}
+
+async function waitUp() {
+  for (let i = 0; i < 60; i++) {
+    await new Promise(r => setTimeout(r, 2000));
+    try { const r = await fetch("/health", { cache: "no-store" }); if (r.ok) return true; } catch (e) {}
+  }
+  return false;
+}
+
+async function save(e) {
+  e.preventDefault();
+  const values = {};
+  new FormData($("form")).forEach((v, k) => { values[k] = String(v); });
+  $("save").disabled = true; msg("Saqlanmoqda…");
+  try {
+    const r = await fetch("/api/setup", { method: "POST", headers: { "X-API-Token": token, "Content-Type": "application/json" }, body: JSON.stringify({ values }) });
+    const data = await r.json();
+    if (!r.ok) { msg(data.detail || "Xato", "err"); return; }
+    status(data.channels);
+    if (!data.saved.length) { msg("O‘zgarish yo‘q.", "ok"); return; }
+    if (data.restarting) {
+      msg("Saqlandi. Agent yangi sozlamalar bilan qayta ishga tushmoqda…");
+      await new Promise(r => setTimeout(r, 3000));
+      msg(await waitUp() ? "Tayyor! Agent yangi sozlamalar bilan ishlayapti." : "Agent hali javob bermadi — bir daqiqadan keyin sahifani yangilang.", "ok");
+    } else {
+      msg("Saqlandi. Kuchga kirishi uchun agentni qayta ishga tushiring.", "ok");
+    }
+    document.querySelectorAll("input[type=password]").forEach(i => { i.value = ""; });
+  } catch (err) {
+    msg("Agent bilan aloqa yo‘q. Nam Tour yorlig‘ini qayta oching.", "err");
+  } finally { $("save").disabled = false; }
+}
+load();
+</script>
+</body>
+</html>

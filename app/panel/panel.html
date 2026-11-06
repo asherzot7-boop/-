@@ -97,6 +97,7 @@ dialog::backdrop { background: rgba(0,0,0,.45); }
       <a href="#director">Раҳбар</a>
       <a href="#agent">Агент иш жараёни</a>
       <a href="#manager">Менежер <span class="badge" id="mgr-badge" hidden></span></a>
+      <a href="/setup">Созламалар</a>
       <a href="/visual/" target="_blank" rel="noopener">3D схемалар ↗</a>
     </nav>
     <span class="stamp" id="stamp"></span>
@@ -111,7 +112,11 @@ dialog::backdrop { background: rgba(0,0,0,.45); }
 const $main = document.getElementById("main");
 const TABS = ["connections", "director", "agent", "manager"];
 let token = "";
-try { token = localStorage.getItem("panel_token") || ""; } catch (e) {}
+try {
+  const m = location.hash.match(/token=([A-Za-z0-9_-]+)/);   // the desktop shortcut opens /panel#token=…
+  if (m) { localStorage.setItem("panel_token", m[1]); history.replaceState(null, "", location.pathname); }
+  token = localStorage.getItem("panel_token") || "";
+} catch (e) {}
 let days = 30, timer = null;
 
 // ---------- safe DOM builder: every client text goes through textContent

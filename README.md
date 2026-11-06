@@ -61,6 +61,9 @@ python -m app.main demo     # Telegram ўрнига консол
 
 ## Windows ноутбукда
 
+**Тайёр дастур:** `NamTour-Setup.exe` (GitHub → Actions → Windows installer → Artifacts). Икки марта босилади. Созламалар браузердаги **Sozlamalar** саҳифасида киритилади, `.env` ни қўлда очиш шарт эмас. Иш столида **Nam Tour Agent** ёрлиғи пайдо бўлади. Ўрнатувчини йиғиш: `deploy/windows/installer/build.ps1` (GitHub Actions ҳар push'да ўзи йиғади).
+
+
 `deploy\windows\install.bat` ни икки марта босинг. Батафсил йўриқнома: [deploy/windows/README.md](deploy/windows/README.md). Унда автоматик ишга тушиш, уйқуни ўчириш, Google Drive'га кунлик захира ва Cloudflare Tunnel ёритилган.
 
 ## Docker (сервер)

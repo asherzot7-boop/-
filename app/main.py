@@ -135,6 +135,32 @@ async def sales_reminder_loop(c: Container) -> None:
         await asyncio.sleep(c.settings.sales_reminder_check_seconds)
 
 
+def _make_bot(token: str, what: str):
+    """aiogram.Bot, or None when the token is malformed (the API and the setup page must still start)."""
+    from aiogram import Bot
+    from aiogram.utils.token import TokenValidationError
+
+    try:
+        return Bot(token)
+    except TokenValidationError:
+        log.error("%s: токен нотўғри ёзилган. /setup саҳифасида тузатинг", what)
+        return None
+
+
+async def _keep_polling(what: str, start, retry: float = 30.0) -> None:
+    """Run a Telegram bot; with a wrong token or no internet log it and try again later instead of
+    taking the whole agent (and the panel where the token is fixed) down with it."""
+    while True:
+        try:
+            await start()
+            return
+        except asyncio.CancelledError:
+            raise
+        except Exception as e:  # noqa: BLE001 - any failure here (bad token, no internet) must not stop the API
+            log.error("%s: Telegram'га уланиб бўлмади (%s). %.0f сониядан кейин қайта уринилади", what, e, retry)
+            await asyncio.sleep(retry)
+
+
 async def run(settings: Settings) -> None:
     from app.notify import ConsoleNotifier, TelegramNotifier
     from app.services.automation import scheduler_loop
@@ -143,15 +169,15 @@ async def run(settings: Settings) -> None:
     jobs: list[asyncio.Task] = []
     sales_bot = None
     if c.sales is not None and settings.sales_bot_token is not None and settings.sales_bot_token.get_secret_value():
-        from aiogram import Bot
-
         from app.salesbot.channels.telegram import build_sales_dispatcher
         from app.salesbot.outbound import TelegramSender
 
-        sales_bot = Bot(settings.sales_bot_token.get_secret_value())
+        sales_bot = _make_bot(settings.sales_bot_token.get_secret_value(), "Мижозлар боти")
+    if sales_bot is not None:
         c.sales.outbound.register(("telegram", "telegram_business"), TelegramSender(sales_bot))
         sales_dp = build_sales_dispatcher(c.sales)
-        jobs.append(asyncio.create_task(sales_dp.start_polling(sales_bot, handle_signals=False), name="sales-bot"))
+        jobs.append(asyncio.create_task(
+            _keep_polling("Мижозлар боти", lambda: sales_dp.start_polling(sales_bot, handle_signals=False)), name="sales-bot"))
         log.info("Мижозлар учун сотув боти ишга тушди")
     if c.sales is not None:
         jobs.append(asyncio.create_task(sales_reminder_loop(c), name="sales-reminders"))
@@ -159,27 +185,29 @@ async def run(settings: Settings) -> None:
         jobs.append(asyncio.create_task(_serve_api(c), name="api"))
         log.info("API: http://%s:%s/health", settings.api_host, settings.api_port)
 
-    if settings.demo_mode:
-        log.warning("BOT_TOKEN берилмаган — DEMO режим. Telegram уланмайди. Консолда синаш: python -m app.main demo")
+    bot = None if settings.demo_mode else _make_bot(settings.bot_token.get_secret_value(), "Ходимлар боти")
+    if bot is None:
+        if settings.demo_mode:
+            log.warning("BOT_TOKEN берилмаган — DEMO режим. Telegram уланмайди. Консолда синаш: python -m app.main demo")
         if c.sales is not None:
             c.sales.notifier = TelegramNotifier(sales_bot) if sales_bot else ConsoleNotifier()
         jobs.append(asyncio.create_task(scheduler_loop(c.session_factory, ConsoleNotifier(), settings), name="automation"))
         await asyncio.gather(*jobs)
         return
 
-    from aiogram import Bot
-
     from app.bot.setup import build_dispatcher, set_commands
 
-    bot = Bot(settings.bot_token.get_secret_value())
     dp = build_dispatcher(c.service, c.session_factory)
     if c.sales is not None:
         c.sales.notifier = TelegramNotifier(bot)  # managers get orders in the staff bot
     jobs.append(asyncio.create_task(scheduler_loop(c.session_factory, TelegramNotifier(bot), settings), name="automation"))
-    try:
+    async def staff_bot() -> None:
         await set_commands(bot)
         log.info("Telegram бот ишга тушди")
         await dp.start_polling(bot, handle_signals=False)
+
+    try:
+        await _keep_polling("Ходимлар боти", staff_bot)
     finally:
         for j in jobs:
             j.cancel()
@@ -287,9 +315,10 @@ def main(argv: list[str] | None = None) -> None:
         asyncio.run(demo_console(settings, a.as_id or (settings.director_ids[0] if settings.director_ids else DEMO_DIRECTOR_ID)))
     elif a.mode == "eval":
         from app.salesbot.agent import build_sales_model
-        from app.salesbot.evaluation import report, run
+        from app.salesbot.evaluation import report
+        from app.salesbot.evaluation import run as run_eval
 
-        results = asyncio.run(run(settings, a.cases, model=build_sales_model(settings)))
+        results = asyncio.run(run_eval(settings, a.cases, model=build_sales_model(settings)))
         print(report(results))
         raise SystemExit(0 if all(r.ok for r in results) else 1)
     elif a.mode == "backup":
