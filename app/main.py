@@ -7,7 +7,6 @@
     python -m app.main sales      # chat with the sales agent as a client
     python -m app.main backup     # zip the database and client documents (--to <folder>)
     python -m app.main eval       # check the sales agent on sales_eval_cases.json
-    python -m app.main visual     # rebuild visual/journeys*.html from three real demo conversations
 """
 from __future__ import annotations
 
@@ -292,20 +291,12 @@ async def seed(settings: Settings) -> None:
 
 def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser(prog="python -m app.main")
-    parser.add_argument("mode", nargs="?", default="run", choices=["run", "demo", "migrate", "seed", "sales", "backup", "eval", "visual"])
+    parser.add_argument("mode", nargs="?", default="run", choices=["run", "demo", "migrate", "seed", "sales", "backup", "eval"])
     parser.add_argument("--as-id", type=int, default=None, help="demo: Telegram ID (default: first director)")
     parser.add_argument("--to", default=None, help="backup: destination folder (default BACKUP_DIR)")
     parser.add_argument("--cases", default="sales_eval_cases.json", help="eval: conversations to check")
     parser.add_argument("--channel", default="console", help="sales: channel name to simulate (instagram, whatsapp, telegram, phone)")
     a = parser.parse_args(argv)
-    if a.mode == "visual":  # rebuild visual/journeys*.html from the real agent; needs no .env, keys or database
-        from app.salesbot.journeys import build
-
-        for path in asyncio.run(build()):
-            print(path)
-        print("Очинг: http://127.0.0.1:8000/visual (бот ишлаётганда) ёки visual/index.html")
-        return
-
     settings = get_settings()
     setup_logging(settings.log_level, settings.secret_values())
     run_migrations(settings.database_url)  # before the event loop: Alembic env uses asyncio.run

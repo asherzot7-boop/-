@@ -30,13 +30,13 @@ async def panel_page() -> HTMLResponse:
 
 
 @page.get("/visual", include_in_schema=False)
+@page.get("/visual/", include_in_schema=False)
 async def visual_root() -> RedirectResponse:
-    return RedirectResponse("/visual/")
+    return RedirectResponse("/visual/journeys-3d.html")
 
 
-@page.get("/visual/", response_class=HTMLResponse)
 @page.get("/visual/{name}", response_class=HTMLResponse)
-async def visual_page(name: str = "index.html") -> HTMLResponse:
+async def visual_page(name: str) -> HTMLResponse:
     pages = {p.name for p in VISUAL.glob("*.html")}  # only the top folder: templates/ and anything else stay out
     if name not in pages:
         raise HTTPException(404, "Бундай саҳифа йўқ")
