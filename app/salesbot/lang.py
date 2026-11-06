@@ -21,7 +21,8 @@ _WORDS = {
            "как", "где", "когда", "что", "отправить", "документы", "паспорт", "проверка", "вы", "вас", "даёте", "гарантию", "заявка", "меня", "зовут"},
     "tr": {"merhaba", "selam", "fiyat", "fiyatı", "kaç", "kadar", "istiyorum", "var", "mı", "mi", "teşekkür", "teşekkürler", "evet", "hayır", "lütfen", "ne", "almak", "kitap", "tane", "adet", "günaydın",
            "veriyor", "musunuz", "misiniz", "nedir", "gerekli", "hangi", "nasıl", "nasil", "garanti", "belge", "belgeler", "pasaport", "sorgulama", "başvuru", "yardım"},
-    "uz": {"salom", "assalomu", "alaykum", "narx", "narxi", "qancha", "kerak", "bormi", "rahmat", "olmoqchiman", "menga", "ha", "yoq", "yo'q", "yaxshi", "nechta", "kitob", "buyurtma", "qanday"},
+    "uz": {"salom", "assalomu", "alaykum", "narx", "narxi", "qancha", "kerak", "bormi", "rahmat", "olmoqchiman", "menga", "ha", "yoq", "yo'q", "yaxshi", "nechta", "kitob", "buyurtma", "qanday",
+           "yubora", "oladi", "boshlig'im", "hujjat", "hujjatlar", "ismim", "kishi", "yil", "yilga", "roziman", "iltimos", "qachon"},
 }
 
 
@@ -46,9 +47,12 @@ def detect(text: str, default: str = "uz") -> tuple[str, bool]:
         if ru > uzc:
             return "ru", True
         return ("uzc" if default in ("uz", "uzc") else "ru"), False
-    if _TR_LETTERS.search(text):
-        return "tr", True
     tr, uz = len(toks & _WORDS["tr"]), len(toks & _WORDS["uz"])
+    if _TR_LETTERS.search(text):
+        # "Istanbul, Kadıköy. Ha, yubora oladi": a Turkish place name inside an Uzbek sentence stays Uzbek
+        if uz > tr:
+            return "uz", True
+        return "tr", tr > 0 or uz == 0
     if any(w in text.lower() for w in ("o'", "g'", "oʻ", "gʻ")) or uz > tr:
         return "uz", uz > 0 or "'" in text
     if tr > uz:
@@ -161,6 +165,8 @@ TEXTS: dict[str, dict[str, str]] = {
         "result_time": "Natija: {time}.",
         "consent": "Hujjatlaringizni faqat arizangizni rasmiylashtirish uchun shifrlangan holda saqlaymiz va xizmat tugagach {days} kundan keyin o'chiramiz. Rozimisiz? «Roziman» deb yozing, keyin hujjatni qayta yuboring.",
         "consent_ok": "Rahmat! Endi hujjatni qayta yuboring.",
+        "consent_pre": "Hujjatlarni yuborishdan oldin: ularni faqat arizangiz uchun shifrlangan holda saqlaymiz va xizmat tugagach {days} kundan keyin o'chiramiz. Rozimisiz? «Roziman» deb yozing.",
+        "consent_thanks": "Rahmat! Endi hujjatlarni shu yerga yuboring (PDF yoki rasm).",
         "docs_state": "Qabul qilingan: {got}\nQoldi: {left}",
         "docs_done": "Barcha hujjatlar qabul qilindi ✅",
         "docs_reminder": "Assalomu alaykum{name}! Arizangiz №{id} uchun hujjatlar yetishmayapti: {left}. PDF yoki rasm qilib shu yerga yuboring.",
@@ -229,6 +235,8 @@ TEXTS: dict[str, dict[str, str]] = {
         "result_time": "Sonuç: {time}.",
         "consent": "Belgelerinizi yalnızca başvurunuz için şifreli olarak saklıyor ve hizmet bittikten {days} gün sonra siliyoruz. Onaylıyor musunuz? «Onaylıyorum» yazın, sonra belgeyi tekrar gönderin.",
         "consent_ok": "Teşekkürler! Şimdi belgeyi tekrar gönderin.",
+        "consent_pre": "Belgeleri göndermeden önce: yalnızca başvurunuz için şifreli olarak saklıyor ve hizmet bittikten {days} gün sonra siliyoruz. Onaylıyor musunuz? «Onaylıyorum» yazın.",
+        "consent_thanks": "Teşekkürler! Şimdi belgeleri buraya gönderin (PDF veya fotoğraf).",
         "docs_state": "Alınan: {got}\nKalan: {left}",
         "docs_done": "Tüm belgeler alındı ✅",
         "docs_reminder": "Merhaba{name}! №{id} numaralı başvurunuz için eksik belgeler: {left}. PDF veya fotoğraf olarak buraya gönderin.",
@@ -297,6 +305,8 @@ TEXTS: dict[str, dict[str, str]] = {
         "result_time": "Результат: {time}.",
         "consent": "Мы храним ваши документы в зашифрованном виде только для оформления заявки и удаляем их через {days} дней после окончания услуги. Вы согласны? Напишите «Согласен», затем отправьте документ ещё раз.",
         "consent_ok": "Спасибо! Теперь отправьте документ ещё раз.",
+        "consent_pre": "Перед отправкой документов: мы храним их в зашифрованном виде только для вашей заявки и удаляем через {days} дней после окончания услуги. Вы согласны? Напишите «Согласен».",
+        "consent_thanks": "Спасибо! Теперь отправьте документы сюда (PDF или фото).",
         "docs_state": "Получено: {got}\nОсталось: {left}",
         "docs_done": "Все документы получены ✅",
         "docs_reminder": "Здравствуйте{name}! Для заявки №{id} не хватает документов: {left}. Пришлите их сюда в PDF или фото.",

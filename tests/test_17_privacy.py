@@ -80,3 +80,15 @@ async def test_old_files_are_purged(priv):
     async with priv.sf() as s:
         assert (await s.scalar(select(LeadFile))).path is None
     assert await a.purge_files() == 0
+
+
+async def test_consent_is_asked_with_the_application_and_counts_when_volunteered(priv):
+    a = priv.agent
+    for i, x in enumerate(["Turkiyada ish beruvchim bor, ishlash uchun hujjatlar kerak", "1 kishi", "Ismim Aziz", "+998 90 123 45 67",
+                           "Istanbul, Kadıköy. Ha, yubora oladi", "ha"]):
+        r = await a.handle("telegram", "c1", x, message_id=f"c{i}")
+    assert r.won and "Rozimisiz" in r.text and r.language == "uz"      # a Turkish place name did not switch the language
+    r = await a.handle("telegram", "c1", "Roziman", message_id="c9")
+    assert r.text.startswith("Rahmat! Endi hujjatlarni shu yerga yuboring")
+    r = await a.handle_file("telegram", "c1", kind="document", data=b"%PDF", file_name="vergi_levhasi.pdf", message_id="cf")
+    assert "Qabul qilingan: Vergi levhası" in r.text

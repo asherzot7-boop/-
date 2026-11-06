@@ -776,7 +776,7 @@ class SalesAgent:
                             display_name=display_name, name=_first_name(display_name))
                 s.add(lead)
                 await s.flush()
-            lead.extra = {**(lead.extra or {}), **(extra or {}), "consent_pending": True}
+            lead.extra = {**(lead.extra or {}), **(extra or {}), "consent_pending": "file"}
             text = L.text(lead.language, "consent", days=self.settings.sales_file_retention_days)
             s.add(LeadMessage(lead_id=lead.id, channel=channel, direction="out", text=text))
             await s.commit()
@@ -1121,11 +1121,11 @@ class SalesAgent:
         lg = lead.language
         shop = self.settings.sales_shop_name
 
-        if (lead.extra or {}).get("consent_pending") and text:
-            norm = L.normalize(text)
-            if L.CONSENT.search(text) or L.CONSENT.search(norm):
-                lead.extra = {**{k: v for k, v in lead.extra.items() if k != "consent_pending"}, "consent": utcnow().isoformat(timespec="seconds")}
-                return AgentReply(L.text(lg, "consent_ok"))
+        if text and not (lead.extra or {}).get("consent") and (L.CONSENT.search(text) or L.CONSENT.search(L.normalize(text))):
+            # consent counts whenever the client writes it, asked or not
+            pending = (lead.extra or {}).get("consent_pending") == "file"
+            lead.extra = {**{k: v for k, v in (lead.extra or {}).items() if k != "consent_pending"}, "consent": utcnow().isoformat(timespec="seconds")}
+            return AgentReply(L.text(lg, "consent_ok" if pending else "consent_thanks"))
 
         if lead.stage == LeadStage.HANDOFF:
             if not text:
@@ -1349,6 +1349,9 @@ class SalesAgent:
             got = (lead.extra or {}).get("docs", {})
             missing = [d for d in product.required_docs if d["id"] not in got]
             lead.extra = {**(lead.extra or {}), "status": 0 if missing else 1}
+            if missing and self.settings.sales_consent_required and not (lead.extra or {}).get("consent"):
+                text += "\n\n" + L.text(lead.language, "consent_pre", days=self.settings.sales_file_retention_days)
+                lead.extra = {**lead.extra, "consent_pending": "won"}
             if missing:
                 text += "\n\n" + L.text(lead.language, "docs_state", got=", ".join(cat._localized(d["name"], lead.language) for d in product.required_docs if d["id"] in got) or "—",
                                          left=", ".join(cat._localized(d["name"], lead.language) for d in missing))
