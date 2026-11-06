@@ -1,5 +1,5 @@
 {
-  "_comment": "JIHAN JAN JASUR NAM TOUR MCHJ — haqiqiy xizmatlar (02.11.2026). Narxlar USD. prepayment — bir kishi uchun oldindan to'lov.",
+  "_comment": "JIHAN JAN JASUR NAM TOUR MCHJ — haqiqiy xizmatlar (02.11.2026). Narxlar USD. prepayment — bir kishi uchun oldindan to'lov. price 0 — narxi kelishiladi (konsultant aytadi): ish-ruxsatnoma, ikamet, tarjima uchun narxni kiriting.",
   "products": [
     {
       "id": "pasport-sorgulama",
@@ -275,6 +275,147 @@
             "belgesi"
           ]
         }
+      ]
+    },
+    {
+      "id": "ish-ruxsatnoma",
+      "kind": "service",
+      "price": 0,
+      "currency": "USD",
+      "name": {
+        "uz": "Turkiyada ishlash uchun ruxsatnoma (çalışma izni)",
+        "tr": "Çalışma izni başvurusu",
+        "ru": "Разрешение на работу в Турции (çalışma izni)"
+      },
+      "description": {
+        "uz": "Turkiyada rasmiy ishlash uchun ruxsatnoma (çalışma izni) olishda arizani tayyorlaymiz va jarayonni kuzatib boramiz.",
+        "tr": "Türkiye'de yasal çalışmak için çalışma izni başvurusunu hazırlıyor ve süreci takip ediyoruz.",
+        "ru": "Готовим заявление на разрешение на работу в Турции (çalışma izni) и ведём процесс до результата."
+      },
+      "documents": {
+        "uz": [
+          "Kerakli hujjatlar ro'yxatini menejer holatingizga qarab yuboradi",
+          "Barcha hujjatlar PDF (skaner) shaklida WhatsApp orqali yuboriladi"
+        ],
+        "tr": [
+          "Gerekli evrak listesini danışmanımız durumunuza göre gönderir",
+          "Tüm evraklar PDF (tarama) olarak WhatsApp üzerinden gönderilir"
+        ],
+        "ru": [
+          "Список нужных документов менеджер пришлёт под вашу ситуацию",
+          "Все документы отправляются в PDF (скан) через WhatsApp"
+        ]
+      },
+      "details_question": {
+        "uz": "Turkiyaning qaysi shahrida ishlaysiz va ish beruvchingiz bormi?",
+        "tr": "Hangi şehirde çalışacaksınız ve işvereniniz var mı?",
+        "ru": "В каком городе Турции будете работать и есть ли уже работодатель?"
+      },
+      "keywords": [
+        "ruxsatnoma",
+        "ruxsat",
+        "izni",
+        "izin",
+        "calisma",
+        "çalışma",
+        "разрешение",
+        "work permit"
+      ]
+    },
+    {
+      "id": "ikamet",
+      "kind": "service",
+      "price": 0,
+      "currency": "USD",
+      "name": {
+        "uz": "Yashash ruxsatnomasi (ikamet) olish va uzaytirish",
+        "tr": "İkamet izni alma ve uzatma",
+        "ru": "Вид на жительство в Турции (ikamet): получение и продление"
+      },
+      "description": {
+        "uz": "Turkiyada yashash ruxsatnomasini (ikamet) birinchi marta olish yoki muddatini uzaytirish uchun hujjatlarni tayyorlaymiz.",
+        "tr": "İlk ikamet izni veya süre uzatma için evrakları hazırlıyoruz.",
+        "ru": "Готовим документы для первого получения или продления вида на жительство (ikamet)."
+      },
+      "documents": {
+        "uz": [
+          "Kerakli hujjatlar ro'yxatini menejer holatingizga qarab yuboradi",
+          "Barcha hujjatlar PDF (skaner) shaklida WhatsApp orqali yuboriladi"
+        ],
+        "tr": [
+          "Gerekli evrak listesini danışmanımız durumunuza göre gönderir",
+          "Tüm evraklar PDF (tarama) olarak WhatsApp üzerinden gönderilir"
+        ],
+        "ru": [
+          "Список нужных документов менеджер пришлёт под вашу ситуацию",
+          "Все документы отправляются в PDF (скан) через WhatsApp"
+        ]
+      },
+      "details_question": {
+        "uz": "Ikamet birinchi martami yoki uzaytirishmi? Uzaytirish bo'lsa, qachon tugaydi?",
+        "tr": "İlk başvuru mu, uzatma mı? Uzatmaysa ne zaman bitiyor?",
+        "ru": "Получаете впервые или продлеваете? Если продление — когда заканчивается текущий?"
+      },
+      "keywords": [
+        "ikamet",
+        "икамет",
+        "yashash",
+        "turar",
+        "uzaytirish",
+        "uzatma",
+        "residence",
+        "вид",
+        "жительство",
+        "внж"
+      ]
+    },
+    {
+      "id": "tarjima",
+      "kind": "service",
+      "price": 0,
+      "currency": "USD",
+      "ask_quantity": false,
+      "name": {
+        "uz": "Hujjat tarjimasi, notarius va apostil",
+        "tr": "Tercüme, noter onayı ve apostil",
+        "ru": "Перевод документов, нотариус и апостиль"
+      },
+      "description": {
+        "uz": "Hujjatlaringizni turk, o'zbek yoki rus tiliga tarjima qilib, notarial tasdiq va apostil bo'yicha yordam beramiz.",
+        "tr": "Belgelerinizi Türkçe, Özbekçe veya Rusçaya çevirip noter onayı ve apostil işlemlerinde yardımcı oluyoruz.",
+        "ru": "Переводим документы на турецкий, узбекский или русский и помогаем с нотариальным заверением и апостилем."
+      },
+      "documents": {
+        "uz": [
+          "Tarjima qilinadigan hujjatlar (PDF yoki skaner) — WhatsApp orqali yuboriladi"
+        ],
+        "tr": [
+          "Tercüme edilecek belgeler (PDF veya tarama) — WhatsApp üzerinden gönderilir"
+        ],
+        "ru": [
+          "Документы для перевода (PDF или скан) — отправляются через WhatsApp"
+        ]
+      },
+      "details_question": {
+        "uz": "Qaysi hujjatlar, nechta va qaysi tilga tarjima kerak?",
+        "tr": "Hangi belgeler, kaç adet ve hangi dile?",
+        "ru": "Какие документы, сколько и на какой язык нужен перевод?"
+      },
+      "keywords": [
+        "tarjima",
+        "tarjimasi",
+        "tercume",
+        "tercüme",
+        "ceviri",
+        "çeviri",
+        "перевод",
+        "перевести",
+        "apostil",
+        "apostille",
+        "апостиль",
+        "notarius",
+        "noter",
+        "нотариус"
       ]
     }
   ]

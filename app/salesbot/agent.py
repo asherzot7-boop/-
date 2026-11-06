@@ -928,7 +928,8 @@ class SalesAgent:
             inv = documents.invoice_pdf(lead, product, self.settings)
             if inv:
                 out[f"hisob_{lead.id}.pdf"] = inv
-            con = documents.contract_pdf(lead, product, self.settings)
+            # a price agreed individually is not known yet: no contract with "0 $" in it, the manager sends one later
+            con = documents.contract_pdf(lead, product, self.settings) if not (product and product.price <= 0) else None
             if con:
                 out[f"shartnoma_{lead.id}.pdf"] = con
             return out
